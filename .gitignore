@@ -21,6 +21,7 @@
 
 # Build outputs
 /frontend/dist/
+/frontend/node_modules/
 /backend/public/build/
 /backend/public/hot/
 /backend/public/storage/
