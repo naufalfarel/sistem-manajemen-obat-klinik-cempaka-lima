@@ -1,0 +1,5 @@
+# Folder ini sengaja dikosongkan.
+
+Seluruh data seed ditulis eksplisit di database/seeders/* (bukan lewat
+Model Factory + Faker) agar datanya realistis untuk konteks farmasi -
+lihat README.md bagian "Keputusan Desain Lain".
