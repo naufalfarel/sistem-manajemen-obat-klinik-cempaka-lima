@@ -20,9 +20,23 @@ class MonitoringController extends Controller
      */
     public function kritis(Request $request): JsonResponse
     {
+        $settings = \App\Models\Setting::query()->where('category', 'stok')->value('data');
+        $defaultMin = (int) ($settings['stok_minimum_default'] ?? 10);
+
         $query = Obat::query()
             ->where('status', 'aktif')
-            ->whereColumn('stok', '<=', 'stok_minimum')
+            ->where(function($q) use ($defaultMin) {
+                $q->where(function($sub) {
+                    $sub->whereNotNull('stok_minimum')
+                        ->where('stok_minimum', '>', 0)
+                        ->whereColumn('stok', '<=', 'stok_minimum');
+                })->orWhere(function($sub) use ($defaultMin) {
+                    $sub->where(function($s) {
+                        $s->whereNull('stok_minimum')
+                          ->orWhere('stok_minimum', '<=', 0);
+                    })->whereColumn('stok', '<=', \Illuminate\Support\Facades\DB::raw($defaultMin));
+                });
+            })
             ->orderBy('stok');
 
         $perPage = min((int) $request->integer('per_page', 15), 100) ?: 15;
@@ -40,7 +54,7 @@ class MonitoringController extends Controller
      */
     public function expired(Request $request): JsonResponse
     {
-        $query = Obat::query()->where('status', 'aktif')->whereNotNull('expired_date');
+        $query = Obat::query()->where('status', 'aktif')->whereNotNull('expired_date')->where('stok', '>', 0);
 
         $filter = $request->string('status')->value() ?: null;
 
@@ -54,6 +68,7 @@ class MonitoringController extends Controller
                 'expired' => $query->whereDate('expired_date', '<', $today),
                 'near-30' => $query->whereDate('expired_date', '>=', $today)->whereDate('expired_date', '<=', $batas30),
                 'near-90' => $query->whereDate('expired_date', '>', $batas30)->whereDate('expired_date', '<=', $batas90),
+                'near' => $query->whereDate('expired_date', '>=', $today)->whereDate('expired_date', '<=', $batas90),
                 'aman' => $query->whereDate('expired_date', '>', $batas90),
                 default => null,
             };

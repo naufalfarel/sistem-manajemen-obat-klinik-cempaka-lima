@@ -36,6 +36,7 @@ interface LayoutProps {
   children: React.ReactNode;
   user: LoginUser;
   onLogout: () => void;
+  onOpenProfile: () => void;
   appConfig?: {
     namaKlinik: string;
     logoUrl: string | null;
@@ -54,19 +55,20 @@ const MENU_GROUPS: {
     ],
   },
   {
-    label: 'Inventaris Obat',
+    label: 'Inventaris Barang',
     items: [
-      { id: 'master-obat',         label: 'Master Obat',         icon: Package },
-      { id: 'kategori',            label: 'Kategori Obat',       icon: Tag },
+      { id: 'master-barang',       label: 'Master Barang',       icon: Package },
+      { id: 'harga-barang',        label: 'Harga Barang',        icon: ClipboardList },
+      { id: 'kategori-barang',     label: 'Kategori Barang',     icon: Tag },
+      { id: 'stock-barang',        label: 'Stock Barang',        icon: PackagePlus },
       { id: 'monitoring-expired',  label: 'Stok Kritis & Expired', icon: AlertTriangle, badge: 0 },
     ],
   },
   {
     label: 'Logistik',
     items: [
-      { id: 'supplier',    label: 'Supplier',         icon: Truck },
-      { id: 'obat-masuk',  label: 'Penerimaan Obat',  icon: PackagePlus },
-      { id: 'obat-keluar', label: 'Pengeluaran Obat', icon: PackageMinus },
+      { id: 'supplier',   label: 'Supplier',  icon: Truck },
+      { id: 'transaksi',  label: 'Transaksi', icon: PackageMinus },
     ],
   },
   {
@@ -87,12 +89,13 @@ const MENU_GROUPS: {
 
 const PAGE_LABELS: Record<Page, string> = {
   'dashboard':          'Dashboard',
-  'master-obat':        'Master Obat',
-  'kategori':           'Kategori Obat',
-  'supplier':           'Supplier',
-  'obat-masuk':         'Penerimaan Obat',
-  'obat-keluar':        'Pengeluaran Obat',
+  'master-barang':      'Master Barang',
+  'harga-barang':       'Harga Barang',
+  'kategori-barang':    'Kategori Barang',
+  'stock-barang':       'Stock Barang',
   'monitoring-expired': 'Stok Kritis & Expired',
+  'supplier':           'Supplier',
+  'transaksi':          'Transaksi',
   'laporan':            'Laporan & Analisis',
   'manajemen-user':     'Manajemen Pengguna',
   'pengaturan':         'Pengaturan Sistem',
@@ -102,12 +105,13 @@ const PAGE_LABELS: Record<Page, string> = {
 
 const PAGE_SECTIONS: Record<Page, string> = {
   'dashboard':          'Ikhtisar',
-  'master-obat':        'Inventaris Obat',
-  'kategori':           'Inventaris Obat',
+  'master-barang':      'Inventaris Barang',
+  'harga-barang':       'Inventaris Barang',
+  'kategori-barang':    'Inventaris Barang',
+  'stock-barang':       'Inventaris Barang',
+  'monitoring-expired': 'Inventaris Barang',
   'supplier':           'Logistik',
-  'obat-masuk':         'Logistik',
-  'obat-keluar':        'Logistik',
-  'monitoring-expired': 'Inventaris Obat',
+  'transaksi':          'Logistik',
   'laporan':            'Pelaporan',
   'manajemen-user':     'Administrasi',
   'pengaturan':         'Administrasi',
@@ -144,6 +148,7 @@ function CollapsedSidebar({
   user,
   onLogout,
   badgeCount,
+  onOpenProfile,
   appConfig,
 }: {
   activePage: Page;
@@ -151,6 +156,7 @@ function CollapsedSidebar({
   user: LoginUser;
   onLogout: () => void;
   badgeCount: number;
+  onOpenProfile: () => void;
   appConfig?: {
     namaKlinik: string;
     logoUrl: string | null;
@@ -171,6 +177,7 @@ function CollapsedSidebar({
         {MENU_GROUPS
           .filter(g => g.label !== 'Administrasi' || isAdmin)
           .flatMap(g => g.items)
+          .filter(({ id }) => id !== 'harga-barang' || (user.role === 'admin' || user.role === 'apoteker'))
           .map(({ id, label, icon: Icon, badge }) => {
             const active = activePage === id;
             const actualBadge = id === 'monitoring-expired' ? badgeCount : badge;
@@ -204,7 +211,7 @@ function CollapsedSidebar({
       {/* User avatar */}
       <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', padding: '10px 0', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
         <button
-          onClick={() => setActivePage('profil')}
+          onClick={onOpenProfile}
           title={user.nama}
           style={{ width: 34, height: 34, borderRadius: '50%', backgroundColor: ACTIVE_CLR, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Space Grotesk', system-ui", fontSize: 11, fontWeight: 700, color: '#fff', overflow: 'hidden', padding: 0 }}
         >
@@ -235,6 +242,7 @@ function SidebarContent({
   user,
   onLogout,
   badgeCount,
+  onOpenProfile,
   appConfig,
 }: {
   activePage: Page;
@@ -243,6 +251,7 @@ function SidebarContent({
   user: LoginUser;
   onLogout: () => void;
   badgeCount: number;
+  onOpenProfile: () => void;
   appConfig?: {
     namaKlinik: string;
     logoUrl: string | null;
@@ -267,7 +276,7 @@ function SidebarContent({
             {appConfig?.namaKlinik || "Klinik Utama Cempaka Lima"}
           </div>
           <div style={{ fontFamily: "'IBM Plex Sans', system-ui", fontSize: 10, color: 'rgba(255,255,255,0.45)', marginTop: 2, letterSpacing: '0.04em' }}>
-            SISTEM MANAJEMEN OBAT
+            SISTEM MANAJEMEN OBAT & BMHP
           </div>
         </div>
         {onClose && (
@@ -286,7 +295,9 @@ function SidebarContent({
             <div style={{ padding: '7px 14px 3px', fontFamily: "'IBM Plex Sans', system-ui", fontSize: 9.5, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: 'rgba(255,255,255,0.28)' }}>
               {group.label}
             </div>
-            {group.items.map(({ id, label, icon: Icon, badge }) => {
+            {group.items
+              .filter(({ id }) => id !== 'harga-barang' || (user.role === 'admin' || user.role === 'apoteker'))
+              .map(({ id, label, icon: Icon, badge }) => {
               const active = activePage === id;
               const actualBadge = id === 'monitoring-expired' ? badgeCount : badge;
               return (
@@ -325,7 +336,7 @@ function SidebarContent({
       <div style={{ flexShrink: 0, borderTop: '1px solid rgba(255,255,255,0.08)', padding: '12px 14px' }}>
         <div
           role="button"
-          onClick={() => { setActivePage('profil'); onClose?.(); }}
+          onClick={() => { onOpenProfile(); onClose?.(); }}
           style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', borderRadius: 4, padding: '2px 4px', transition: 'background-color 0.12s' }}
           onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.06)')}
           onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
@@ -369,6 +380,7 @@ function MobileMenuSheet({
   onLogout,
   onClose,
   badgeCount,
+  onOpenProfile,
   appConfig,
 }: {
   activePage: Page;
@@ -377,6 +389,7 @@ function MobileMenuSheet({
   onLogout: () => void;
   onClose: () => void;
   badgeCount: number;
+  onOpenProfile: () => void;
   appConfig?: {
     namaKlinik: string;
     logoUrl: string | null;
@@ -410,7 +423,9 @@ function MobileMenuSheet({
               <div style={{ padding: '6px 16px 2px', fontFamily: "'IBM Plex Sans', system-ui", fontSize: 9.5, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: 'rgba(255,255,255,0.28)' }}>
                 {group.label}
               </div>
-              {group.items.map(({ id, label, icon: Icon, badge }) => {
+              {group.items
+                .filter(({ id }) => id !== 'harga-barang' || (user.role === 'admin' || user.role === 'apoteker'))
+                .map(({ id, label, icon: Icon, badge }) => {
                 const active = activePage === id;
                 const actualBadge = id === 'monitoring-expired' ? badgeCount : badge;
                 return (
@@ -456,22 +471,35 @@ function NotifPanel({
   onNavigate,
   notificationsList,
   loading,
-  onDismiss
+  onDismiss,
+  onDismissAll
 }: {
   onNavigate: (p: Page) => void;
   notificationsList: Notification[];
   loading: boolean;
   onDismiss: (id: string) => void;
+  onDismissAll: () => void;
 }) {
   return (
-    <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', width: 300, backgroundColor: '#fff', border: `1px solid #D8DDE1`, borderRadius: 6, boxShadow: '0 6px 20px rgba(0,0,0,0.12)', zIndex: 50, overflow: 'hidden' }}>
+    <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', width: 320, backgroundColor: '#fff', border: `1px solid #D8DDE1`, borderRadius: 6, boxShadow: '0 6px 20px rgba(0,0,0,0.12)', zIndex: 50, overflow: 'hidden' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid #E4E8EC', backgroundColor: '#F7F7F4' }}>
-        <span style={{ fontFamily: "'Space Grotesk', system-ui", fontSize: 13, fontWeight: 700, color: NAVY }}>Notifikasi</span>
-        <span style={{ padding: '1px 8px', borderRadius: 10, backgroundColor: '#FDF2F0', border: `1px solid ${BRICK}33`, fontFamily: "'IBM Plex Sans', system-ui", fontSize: 10.5, fontWeight: 700, color: BRICK }}>
-          {notificationsList.length} perlu tindakan
-        </span>
+        <span style={{ fontFamily: "'Space Grotesk', system-ui", fontSize: 13, fontWeight: 700, color: NAVY }}>Notifikasi ({notificationsList.length})</span>
+        {notificationsList.length > 0 && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onDismissAll(); }}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              fontFamily: "'IBM Plex Sans', system-ui", fontSize: 11, fontWeight: 600, color: BRICK,
+              padding: '2px 6px', borderRadius: 3, transition: 'background-color 0.12s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(184,72,58,0.08)'}
+            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+          >
+            Tandai Semua Dibaca
+          </button>
+        )}
       </div>
-      <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+      <div style={{ maxHeight: 340, overflowY: 'auto' }}>
         {loading ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
             <Loader2 size={18} className="animate-spin text-emerald-600" style={{ animation: 'spin 1s linear infinite' }} />
@@ -512,9 +540,10 @@ function NotifPanel({
 }
 
 /* ── Main Layout ────────────────────────────────────────────────────────────── */
-export function Layout({ activePage, setActivePage, children, user, onLogout, appConfig }: LayoutProps) {
+export function Layout({ activePage, setActivePage, children, user, onLogout, onOpenProfile, appConfig }: LayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
+  const [isHoveredSidebar, setIsHoveredSidebar] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
   const windowWidth = useWindowWidth();
 
@@ -538,9 +567,18 @@ export function Layout({ activePage, setActivePage, children, user, onLogout, ap
     setBadgeCount(prev => Math.max(0, prev - 1));
   };
 
+  const handleDismissAll = () => {
+    const allIds = notifItems.map(n => n.id);
+    const next = Array.from(new Set([...dismissedIds, ...allIds]));
+    setDismissedIds(next);
+    localStorage.setItem('dismissed_notifications', JSON.stringify(next));
+    setNotifItems([]);
+    setBadgeCount(0);
+  };
+
   const isMobile  = windowWidth < 768;
-  const isTablet  = windowWidth >= 768 && windowWidth < 1024;
-  const isDesktop = windowWidth >= 1024;
+  const isTablet  = windowWidth >= 768 && windowWidth < 992;
+  const isDesktop = windowWidth >= 992;
 
   const fetchSidebarData = async () => {
     try {
@@ -571,9 +609,20 @@ export function Layout({ activePage, setActivePage, children, user, onLogout, ap
         });
       });
 
+      const nearRes = await monitoringApi.expired({ page: 1, per_page: 100, status: 'near' });
+      nearRes.data.forEach((item) => {
+        notifList.push({
+          id: `near-${item.obat_id}`,
+          type: 'expired',
+          message: `${item.nama} (${item.kode}) akan kadaluarsa (${item.expired_date})!`,
+          time: 'Segera',
+          severity: 'yellow'
+        });
+      });
+
       const filtered = notifList.filter(n => !dismissedIds.includes(n.id));
       setBadgeCount(filtered.length);
-      setNotifItems(filtered.slice(0, 5));
+      setNotifItems(filtered);
     } catch (err) {
       console.error('Gagal memuat data sidebar & notifikasi', err);
     } finally {
@@ -603,14 +652,36 @@ export function Layout({ activePage, setActivePage, children, user, onLogout, ap
       {/* Desktop sidebar */}
       {isDesktop && (
         <aside style={{ width: 220, flexShrink: 0, height: '100%', display: 'flex', flexDirection: 'column' }}>
-          <SidebarContent activePage={activePage} setActivePage={setActivePage} user={user} onLogout={onLogout} badgeCount={badgeCount} appConfig={appConfig} />
+          <SidebarContent activePage={activePage} setActivePage={setActivePage} user={user} onLogout={onLogout} badgeCount={badgeCount} onOpenProfile={onOpenProfile} appConfig={appConfig} />
         </aside>
       )}
 
-      {/* Tablet sidebar (collapsed) */}
+      {/* Tablet sidebar (collapsed, expands on hover) */}
       {isTablet && (
-        <aside style={{ width: 60, flexShrink: 0, height: '100%' }}>
-          <CollapsedSidebar activePage={activePage} setActivePage={setActivePage} user={user} onLogout={onLogout} badgeCount={badgeCount} appConfig={appConfig} />
+        <aside
+          onMouseEnter={() => setIsHoveredSidebar(true)}
+          onMouseLeave={() => setIsHoveredSidebar(false)}
+          style={{ width: 60, flexShrink: 0, height: '100%', position: 'relative', zIndex: 45 }}
+        >
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              height: '100%',
+              width: isHoveredSidebar ? 220 : 60,
+              transition: 'width 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+              overflow: 'hidden',
+              boxShadow: isHoveredSidebar ? '4px 0 15px rgba(0,0,0,0.15)' : 'none',
+              backgroundColor: SIDEBAR_BG,
+            }}
+          >
+            {isHoveredSidebar ? (
+              <SidebarContent activePage={activePage} setActivePage={setActivePage} user={user} onLogout={onLogout} badgeCount={badgeCount} onOpenProfile={onOpenProfile} appConfig={appConfig} />
+            ) : (
+              <CollapsedSidebar activePage={activePage} setActivePage={setActivePage} user={user} onLogout={onLogout} badgeCount={badgeCount} onOpenProfile={onOpenProfile} appConfig={appConfig} />
+            )}
+          </div>
         </aside>
       )}
 
@@ -623,6 +694,7 @@ export function Layout({ activePage, setActivePage, children, user, onLogout, ap
           onLogout={onLogout}
           onClose={() => setMobileMenuOpen(false)}
           badgeCount={badgeCount}
+          onOpenProfile={onOpenProfile}
           appConfig={appConfig}
         />
       )}
@@ -684,16 +756,16 @@ export function Layout({ activePage, setActivePage, children, user, onLogout, ap
                 <span style={{ position: 'absolute', top: 6, right: 6, width: 7, height: 7, borderRadius: '50%', backgroundColor: BRICK, border: '1.5px solid #fff' }} />
               )}
             </button>
-            {showNotif && <NotifPanel onNavigate={(p) => { setActivePage(p); setShowNotif(false); }} notificationsList={notifItems} loading={notifLoading} onDismiss={handleDismissNotif} />}
+            {showNotif && <NotifPanel onNavigate={(p) => { setActivePage(p); setShowNotif(false); }} notificationsList={notifItems} loading={notifLoading} onDismiss={handleDismissNotif} onDismissAll={handleDismissAll} />}
           </div>
 
           {/* User chip — desktop/tablet */}
           {!isMobile && (
             <div
-              onClick={() => setActivePage('profil')}
-              style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '4px 10px 4px 5px', borderRadius: 5, border: '1px solid #E4E8EC', backgroundColor: activePage === 'profil' ? '#EEF1F7' : '#F7F7F4', flexShrink: 0, cursor: 'pointer', transition: 'background-color 0.12s' }}
+              onClick={onOpenProfile}
+              style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '4px 10px 4px 5px', borderRadius: 5, border: '1px solid #E4E8EC', backgroundColor: '#F7F7F4', flexShrink: 0, cursor: 'pointer', transition: 'background-color 0.12s' }}
               onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#EEF1F7')}
-              onMouseLeave={e => (e.currentTarget.style.backgroundColor = activePage === 'profil' ? '#EEF1F7' : '#F7F7F4')}
+              onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#F7F7F4')}
             >
               <div style={{ width: 24, height: 24, borderRadius: '50%', backgroundColor: ACTIVE_CLR, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Space Grotesk', system-ui", fontSize: 9.5, fontWeight: 700, color: '#fff', flexShrink: 0, overflow: 'hidden' }}>
                 {user.fotoUrl

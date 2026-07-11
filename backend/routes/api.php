@@ -9,8 +9,10 @@ use App\Http\Controllers\Api\MonitoringController;
 use App\Http\Controllers\Api\ObatController;
 use App\Http\Controllers\Api\ObatKeluarController;
 use App\Http\Controllers\Api\ObatMasukController;
+use App\Http\Controllers\Api\HargaBarangController;
 use App\Http\Controllers\Api\PenggunaController;
 use App\Http\Controllers\Api\PengaturanController;
+use App\Http\Controllers\Api\StokRevisiController;
 use App\Http\Controllers\Api\SupplierController;
 use Illuminate\Support\Facades\Route;
 
@@ -34,6 +36,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/refresh', [AuthController::class, 'refresh']);
+    Route::post('/auth/profile', [AuthController::class, 'updateProfile']);
+    Route::patch('/auth/password', [AuthController::class, 'updatePassword']);
 
     /* ── Obat ─────────────────────────────────────────────────────────── */
     // /export didaftarkan SEBELUM /{obat} agar tidak ditangkap sebagai id.
@@ -41,6 +45,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/obat', [ObatController::class, 'index']);
     Route::post('/obat', [ObatController::class, 'store']);
     Route::get('/obat/{obat}', [ObatController::class, 'show']);
+    Route::get('/obat/{obat}/kartu-stok', [ObatController::class, 'kartuStok']);
     Route::put('/obat/{obat}', [ObatController::class, 'update']);
     Route::delete('/obat/{obat}', [ObatController::class, 'destroy']);
 
@@ -61,6 +66,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /* ── Obat Masuk ───────────────────────────────────────────────────── */
     Route::get('/obat-masuk', [ObatMasukController::class, 'index']);
+    Route::get('/obat-masuk/check-faktur', [ObatMasukController::class, 'checkFaktur']);
     Route::post('/obat-masuk', [ObatMasukController::class, 'store']);
     Route::get('/obat-masuk/{obatMasuk}', [ObatMasukController::class, 'show']);
     Route::patch('/obat-masuk/{obatMasuk}/terima', [ObatMasukController::class, 'terima']);
@@ -72,11 +78,17 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/obat-keluar/{obatKeluar}', [ObatKeluarController::class, 'show']);
     Route::patch('/obat-keluar/{obatKeluar}/retur', [ObatKeluarController::class, 'retur']);
     Route::patch('/obat-keluar/{obatKeluar}/void', [ObatKeluarController::class, 'void']);
+    Route::post('/obat-keluar/{obatKeluar}/cetak', [ObatKeluarController::class, 'logCetak']);
 
     /* ── Monitoring ───────────────────────────────────────────────────── */
     Route::get('/monitoring/kritis', [MonitoringController::class, 'kritis']);
     Route::get('/monitoring/expired', [MonitoringController::class, 'expired']);
     Route::get('/monitoring/summary', [MonitoringController::class, 'summary']);
+
+    /* ── Revisi / Penyesuaian Stok ────────────────────────────────────── */
+    Route::get('/stok-revisi', [StokRevisiController::class, 'index']);
+    Route::post('/stok-revisi', [StokRevisiController::class, 'store']);
+    Route::get('/stok-revisi/{stokRevisi}', [StokRevisiController::class, 'show']);
 
     /* ── Laporan ──────────────────────────────────────────────────────────
        Path dasar (json) DAN path /export (csv|pdf) diarahkan ke method yang
@@ -90,6 +102,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/laporan/kadaluarsa/export', [LaporanController::class, 'kadaluarsa']);
     Route::get('/laporan/logistik', [LaporanController::class, 'logistik']);
     Route::get('/laporan/logistik/export', [LaporanController::class, 'logistik']);
+    Route::get('/laporan/analisis', [LaporanController::class, 'analisis']);
+    Route::get('/laporan/analisis/export', [LaporanController::class, 'analisis']);
 
     /* ── Dashboard ────────────────────────────────────────────────────── */
     Route::get('/dashboard/summary', [DashboardController::class, 'summary']);
@@ -99,6 +113,16 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /* ── Roles (daftar role yang tersedia) ─────────────────────────────── */
     Route::get('/roles', [PenggunaController::class, 'roles']);
+
+    /* ── Harga Barang ─────────────────────────────────────────────────── */
+    Route::middleware('role:admin,apoteker')->group(function () {
+        Route::get('/harga-barang', [HargaBarangController::class, 'index']);
+        Route::put('/harga-barang/{obat}', [HargaBarangController::class, 'update']);
+        Route::get('/harga-barang/proposals', [HargaBarangController::class, 'proposals']);
+        Route::post('/harga-barang/proposals/{id}/confirm', [HargaBarangController::class, 'confirmProposal']);
+        Route::post('/harga-barang/proposals/{id}/reject', [HargaBarangController::class, 'rejectProposal']);
+        Route::get('/harga-barang/{id}/history', [HargaBarangController::class, 'history']);
+    });
 
     /* ── Pengguna, Pengaturan, Audit Log - KHUSUS ADMIN ──────────────────
        Dijaga middleware 'role:admin' (route-level) + Policy (object-level)

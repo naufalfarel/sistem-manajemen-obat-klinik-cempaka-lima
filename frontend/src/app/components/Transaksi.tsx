@@ -1,10 +1,9 @@
 import { useState, useMemo, useEffect } from 'react';
 import {
-  Plus, Trash2, Save, Printer, Search, Download, Eye, X,
-  AlertTriangle, ShoppingCart, TrendingUp, RotateCcw,
-  Receipt, User, Stethoscope, Package,
-  CheckCircle, ArrowLeft, Banknote, CreditCard, QrCode, Shield,
-  Clock, RefreshCw, Loader2, ChevronLeft, ChevronRight
+  Plus, Trash2, Save, Printer, Search, Eye, X,
+  RotateCcw, Receipt, User, Package,
+  TrendingUp, Clock, RefreshCw, Loader2, ChevronLeft, ChevronRight,
+  Banknote, CreditCard, QrCode, Shield
 } from 'lucide-react';
 import { 
   obatKeluarApi, 
@@ -16,7 +15,7 @@ import { toast } from 'sonner';
 
 const PRIMARY = '#0F9D74';
 
-const JENIS_LABEL: Record<string, string> = { resep: 'Resep', otc: 'Obat Bebas', retur: 'Retur', void: 'Void' };
+const JENIS_LABEL: Record<string, string> = { resep: 'Resep', otc: 'Barang Bebas', retur: 'Retur', void: 'Void' };
 const JENIS_COLOR: Record<string, string> = {
   resep: 'bg-blue-100 text-blue-700',
   otc: 'bg-emerald-100 text-emerald-700',
@@ -77,7 +76,7 @@ function StatCard({
   );
 }
 
-export function ObatKeluar() {
+export function Transaksi() {
   const [transactions, setTransactions] = useState<ApiObatKeluar[]>([]);
   const [drugs, setDrugs] = useState<ApiObat[]>([]);
   const [loading, setLoading] = useState(true);
@@ -91,7 +90,14 @@ export function ObatKeluar() {
   const [showPrint, setShowPrint] = useState<any | null>(null);
 
   // Filters & Pagination
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => {
+    const passed = localStorage.getItem('transaksi_filter_search');
+    if (passed) {
+      localStorage.removeItem('transaksi_filter_search');
+      return passed;
+    }
+    return '';
+  });
   const [filterJenis, setFilterJenis] = useState('');
   const [filterMetode, setFilterMetode] = useState('');
   const [filterDate, setFilterDate] = useState('');
@@ -100,7 +106,6 @@ export function ObatKeluar() {
   const [lastPage, setLastPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
 
-  // Today stats dari database (dihitung lokal dari list saat ini atau dummy)
   const todayTx = useMemo(() =>
     transactions.filter(t => t.tanggal?.startsWith(new Date().toISOString().split('T')[0]) && t.status !== 'retur' && t.status !== 'void'), [transactions]);
   
@@ -108,7 +113,7 @@ export function ObatKeluar() {
     transactions.filter(t => t.tanggal?.startsWith(new Date().toISOString().split('T')[0]) && (t.status === 'retur' || t.status === 'void')), [transactions]);
 
   const stats = useMemo(() => ({
-    obatTerjual: todayTx.reduce((s, t) => s + t.total_item, 0),
+    barangTerjual: todayTx.reduce((s, t) => s + t.total_item, 0),
     transaksi: todayTx.length,
     pendapatan: todayTx.reduce((s, t) => s + t.nilai_total, 0),
     retur: todayRetur.length,
@@ -132,12 +137,12 @@ export function ObatKeluar() {
         page,
         per_page: 8,
         search: search.trim() || undefined,
-        jenis: (filterJenis || undefined) as any, // backend status/jenis map
+        jenis: (filterJenis || undefined) as any,
         obat_id: filterObatId ? parseInt(filterObatId) : undefined,
         dari: filterDate || undefined,
         sampai: filterDate || undefined
       });
-      // Pindahkan response backend ke mapping state
+
       const mappedList: ApiObatKeluar[] = res.data.map(item => ({
         id: item.id,
         no_transaksi: item.no_transaksi,
@@ -153,7 +158,6 @@ export function ObatKeluar() {
         petugas: item.petugas,
         catatan: item.catatan,
         created_at: item.created_at,
-        // Properti computed untuk stat
         total_item: (item as any).items?.reduce((acc: number, it: any) => acc + it.jumlah, 0) || 1,
         nilai_total: item.total
       }));
@@ -161,7 +165,7 @@ export function ObatKeluar() {
       setLastPage(res.meta.last_page);
       setTotalCount(res.meta.total);
     } catch (err: any) {
-      toast.error(err?.message || 'Gagal memuat riwayat transaksi obat keluar');
+      toast.error(err?.message || 'Gagal memuat riwayat transaksi');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -188,41 +192,54 @@ export function ObatKeluar() {
     try {
       const res = await obatKeluarApi.get(record.id);
       setDetailItems((res as any).data.items || []);
+      setShowDetail(res.data);
     } catch (err: any) {
-      toast.error('Gagal memuat rincian item obat keluar');
+      toast.error('Gagal memuat rincian item transaksi keluar');
     } finally {
       setLoadingDetail(false);
+    }
+  };
+
+  const handleRefreshDetail = async (id: number) => {
+    try {
+      const res = await obatKeluarApi.get(id);
+      setShowDetail(res.data);
+      setDetailItems((res as any).data.items || []);
+    } catch (err: any) {
+      console.error('Gagal menyegarkan riwayat cetak', err);
     }
   };
 
   const handleSaveTransaction = async (payload: any) => {
     try {
       const res = await obatKeluarApi.create(payload);
-      toast.success('Transaksi obat keluar berhasil disimpan.');
+      toast.success('Transaksi keluar berhasil disimpan.');
       setShowForm(false);
       fetchTransactions(true);
-      fetchDrugsMetadata(); // Refresh stok obat terbaru
+      fetchDrugsMetadata();
       
-      // Tampilkan nota setelah save
       const newRecord = res.data;
       setShowPrint({
         noTransaksi: newRecord.no_transaksi,
         tanggal: newRecord.tanggal,
         namaPasien: newRecord.nama_pasien,
+        noRekamMedis: newRecord.no_rekam_medis,
         dokter: newRecord.dokter,
         petugas: newRecord.petugas?.nama || 'Apoteker',
         totalBayar: newRecord.total,
         metodeBayar: newRecord.metode_pembayaran,
         items: newRecord.items?.map((it: any) => ({
-          namaObat: it.obat?.nama || 'Obat',
+          namaObat: it.obat?.nama || 'Barang',
           jumlah: it.jumlah,
           hargaJual: it.harga,
           diskon: 0,
           subtotal: it.subtotal
-        })) || []
+        })) || [],
+        jenisCetak: 'nota',
+        tipeResep: newRecord.tipe_resep
       });
     } catch (err: any) {
-      toast.error(err?.message || 'Gagal membuat transaksi obat keluar');
+      toast.error(err?.message || 'Gagal membuat transaksi keluar');
     }
   };
 
@@ -232,7 +249,7 @@ export function ObatKeluar() {
       await obatKeluarApi.retur(showRetur.id, {
         alasan: alasan
       });
-      toast.success('Transaksi berhasil diretur dan stok obat dikembalikan.');
+      toast.success('Transaksi berhasil diretur dan stok barang dikembalikan.');
       setShowRetur(null);
       fetchTransactions(true);
       fetchDrugsMetadata();
@@ -241,22 +258,19 @@ export function ObatKeluar() {
     }
   };
 
-  const formatRupiahLocal = (num: number) => formatRupiah(num);
-
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 font-sans">
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={Package} label="Obat Terjual Hari Ini" value={`${stats.obatTerjual} item`} sub="dari transaksi hari ini" color="bg-emerald-500" />
+        <StatCard icon={Package} label="Barang Keluar Hari Ini" value={`${stats.barangTerjual} item`} sub="dari transaksi hari ini" color="bg-emerald-500" />
         <StatCard icon={Receipt} label="Transaksi Hari Ini" value={String(stats.transaksi)} sub="resep & bebas" color="bg-blue-500" />
-        <StatCard icon={TrendingUp} label="Pendapatan Hari Ini" value={formatRupiahLocal(stats.pendapatan)} sub="real-time" color="bg-violet-500" />
+        <StatCard icon={TrendingUp} label="Pendapatan Hari Ini" value={formatRupiah(stats.pendapatan)} sub="real-time" color="bg-violet-500" />
         <StatCard icon={RotateCcw} label="Retur/Void Hari Ini" value={String(stats.retur)} sub="item dibatalkan" color="bg-orange-500" />
       </div>
 
       {/* Toolbar */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
         <form onSubmit={handleSearchSubmit} className="flex flex-wrap items-center gap-3">
-          {/* Search */}
           <div className="flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-2 flex-1 min-w-52">
             <Search size={14} className="text-gray-400 flex-shrink-0" />
             <input
@@ -266,32 +280,29 @@ export function ObatKeluar() {
             />
           </div>
 
-          {/* Filter date */}
           <div className="relative">
             <input
               type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)}
-              className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-emerald-400 text-gray-600"
+              className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-emerald-400 text-gray-600 bg-white"
             />
           </div>
 
-          {/* Filter jenis */}
           <select
             value={filterJenis} onChange={e => { setFilterJenis(e.target.value); setPage(1); }}
             className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-emerald-400 bg-white text-gray-600"
           >
             <option value="">Semua Jenis</option>
             <option value="resep">Resep Dokter</option>
-            <option value="otc">Obat Bebas (OTC)</option>
+            <option value="otc">Barang Bebas / Umum</option>
             <option value="retur">Retur</option>
             <option value="void">Void</option>
           </select>
 
-          {/* Filter obat */}
           <select
             value={filterObatId} onChange={e => { setFilterObatId(e.target.value); setPage(1); }}
             className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-emerald-400 bg-white text-gray-600 max-w-44"
           >
-            <option value="">Semua Obat</option>
+            <option value="">Semua Barang</option>
             {drugs.map(d => (
               <option key={d.id} value={d.id}>{d.nama}</option>
             ))}
@@ -312,7 +323,7 @@ export function ObatKeluar() {
             className="flex items-center gap-1.5 text-sm text-white rounded-lg px-4 py-2 hover:opacity-90 transition-opacity font-medium ml-auto"
             style={{ backgroundColor: PRIMARY }}
           >
-            <Plus size={14} /> Transaksi Obat Keluar
+            <Plus size={14} /> Transaksi Baru
           </button>
         </form>
       </div>
@@ -320,7 +331,7 @@ export function ObatKeluar() {
       {/* Table */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
-          <span className="text-sm font-semibold text-gray-700">Riwayat Transaksi Obat Keluar</span>
+          <span className="text-sm font-semibold text-gray-700">Riwayat Transaksi Keluar</span>
           <span className="text-xs text-gray-400">{totalCount} transaksi</span>
         </div>
         {loading ? (
@@ -333,7 +344,7 @@ export function ObatKeluar() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100">
-                  {['No. Transaksi', 'Tanggal', 'Nama Pasien', 'Jenis', 'Jml. Jenis', 'Total Bayar', 'Metode', 'Petugas', 'Aksi'].map(h => (
+                  {['No. Transaksi', 'Tanggal', 'Nama Pasien', 'Jenis', 'Jml. Item', 'Total Bayar', 'Metode', 'Petugas', 'Aksi'].map(h => (
                     <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -356,14 +367,25 @@ export function ObatKeluar() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <Badge text={JENIS_LABEL[t.jenis] || t.jenis} color={JENIS_COLOR[t.jenis] || 'bg-gray-100'} />
+                        <Badge 
+                          text={
+                            t.jenis === 'resep' 
+                              ? (t.tipe_resep === 'racik' ? 'Resep Racik' : (t.tipe_resep === 'non-racik' ? 'Resep Non-Racik' : 'Resep'))
+                              : (JENIS_LABEL[t.jenis] || t.jenis)
+                          } 
+                          color={
+                            t.jenis === 'resep'
+                              ? (t.tipe_resep === 'racik' ? 'bg-indigo-100 text-indigo-700' : 'bg-blue-100 text-blue-700')
+                              : (JENIS_COLOR[t.jenis] || 'bg-gray-100')
+                          } 
+                        />
                       </td>
                       <td className="px-4 py-3 text-center">
                         <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium">{t.total_item}</span>
                       </td>
                       <td className="px-4 py-3">
                         <span className={`text-sm font-semibold font-mono ${t.status === 'retur' || t.status === 'void' ? 'text-orange-600' : 'text-gray-800'}`}>
-                          {formatRupiahLocal(t.total)}
+                          {formatRupiah(t.total)}
                         </span>
                       </td>
                       <td className="px-4 py-3">
@@ -384,7 +406,6 @@ export function ObatKeluar() {
                           </button>
                           <button
                             onClick={() => {
-                              // generate printer preview format
                               setShowPrint({
                                 noTransaksi: t.no_transaksi,
                                 tanggal: t.tanggal,
@@ -393,7 +414,7 @@ export function ObatKeluar() {
                                 petugas: t.petugas?.nama || 'Apoteker',
                                 totalBayar: t.total,
                                 metodeBayar: t.metode_pembayaran,
-                                items: [] // akan di-load jika diprint dari detail
+                                items: []
                               });
                             }}
                             title="Cetak nota"
@@ -470,26 +491,31 @@ export function ObatKeluar() {
           items={detailItems}
           loading={loadingDetail}
           onClose={() => { setShowDetail(null); setDetailItems([]); }}
-          onPrint={() => {
+          onPrint={(jenisCetak) => {
             setShowPrint({
               noTransaksi: showDetail.no_transaksi,
               tanggal: showDetail.tanggal,
               namaPasien: showDetail.nama_pasien,
+              noRekamMedis: showDetail.no_rekam_medis,
               dokter: showDetail.dokter,
               petugas: showDetail.petugas?.nama || 'Apoteker',
               totalBayar: showDetail.total,
               metodeBayar: showDetail.metode_pembayaran,
               items: detailItems.map(it => ({
-                namaObat: it.obat?.nama || 'Obat',
+                namaObat: it.obat?.nama || 'Barang',
                 jumlah: it.jumlah,
                 hargaJual: it.harga,
                 diskon: 0,
-                subtotal: it.subtotal
-              }))
+                subtotal: it.subtotal,
+                satuan: it.obat?.satuan || 'unit'
+              })),
+              jenisCetak: jenisCetak || 'nota',
+              tipeResep: showDetail.tipe_resep
             });
             setShowDetail(null);
           }}
           onRetur={() => { setShowRetur(showDetail); setShowDetail(null); }}
+          onRefreshHistory={() => handleRefreshDetail(showDetail.id)}
         />
       )}
 
@@ -510,6 +536,116 @@ export function ObatKeluar() {
   );
 }
 
+/* ─── SEARCHABLE SELECT DRUG ─────────────────────────────────────────────── */
+interface SearchableDrugSelectProps {
+  drugs: ApiObat[];
+  value: string;
+  onChange: (value: string) => void;
+}
+
+function SearchableDrugSelect({ drugs, value, onChange }: SearchableDrugSelectProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+
+  const selectedDrug = drugs.find(d => String(d.id) === value);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return drugs;
+    const q = search.toLowerCase();
+    return drugs.filter(d => 
+      d.nama.toLowerCase().includes(q) || 
+      d.kode.toLowerCase().includes(q)
+    );
+  }, [drugs, search]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.searchable-select-container')) {
+        setIsOpen(false);
+      }
+    };
+    const timer = setTimeout(() => {
+      document.addEventListener('click', handleOutsideClick);
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('click', handleOutsideClick);
+    };
+  }, [isOpen]);
+
+  return (
+    <div 
+      className="relative searchable-select-container min-w-[200px] text-xs"
+      onClick={e => e.stopPropagation()}
+    >
+      {isOpen ? (
+        <div className="relative">
+          <input
+            type="text"
+            autoFocus
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Cari nama / kode obat..."
+            className="w-full border border-emerald-400 rounded-lg px-2 py-1.5 text-xs outline-none bg-white text-gray-800 shadow-sm"
+          />
+          <button 
+            type="button" 
+            onClick={() => setIsOpen(false)} 
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+          >
+            <X size={12} />
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => { setIsOpen(true); setSearch(''); }}
+          className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-left bg-white text-gray-700 hover:border-gray-300 transition-colors flex justify-between items-center"
+        >
+          <span className="truncate">
+            {selectedDrug ? `${selectedDrug.nama} (${selectedDrug.kode})` : 'Pilih barang…'}
+          </span>
+          <span className="text-gray-400 ml-1">▾</span>
+        </button>
+      )}
+
+      {isOpen && (
+        <div className="absolute left-0 right-0 mt-1 max-h-60 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1">
+          {filtered.length > 0 ? (
+            filtered.map(d => (
+              <button
+                key={d.id}
+                type="button"
+                disabled={d.stok <= 0}
+                onClick={() => {
+                  onChange(String(d.id));
+                  setIsOpen(false);
+                }}
+                className={`w-full text-left px-3 py-1.5 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-xs ${
+                  value === String(d.id) ? 'bg-emerald-50 text-emerald-700 font-medium' : 'text-gray-700'
+                }`}
+              >
+                <div className="flex justify-between items-center">
+                  <span className="font-medium truncate">{d.nama}</span>
+                  <span className="text-[10px] text-gray-400 font-mono shrink-0 ml-1">{d.kode}</span>
+                </div>
+                <div className="flex justify-between items-center text-[10px] text-gray-400 mt-0.5">
+                  <span>Stok: {d.stok} {d.satuan}</span>
+                  <span className="font-mono text-emerald-600 font-semibold">{formatRupiah(d.harga_jual)}</span>
+                </div>
+              </button>
+            ))
+          ) : (
+            <p className="text-gray-400 italic text-center py-2.5">Barang tidak ditemukan</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── MODAL TRANSACTION FORM ───────────────────────────────────────────── */
 function TransactionFormModal({
   drugs, onSave, onClose
@@ -519,6 +655,7 @@ function TransactionFormModal({
   onClose: () => void;
 }) {
   const [jenis, setJenis] = useState<'resep' | 'otc'>('resep');
+  const [tipeResep, setTipeResep] = useState<'non-racik' | 'racik'>('non-racik');
   const [namaPasien, setNamaPasien] = useState('');
   const [noRekamMedis, setNoRekamMedis] = useState('');
   const [dokter, setDokter] = useState('');
@@ -551,7 +688,7 @@ function TransactionFormModal({
 
   function handleSave() {
     if (jenis === 'resep' && !namaPasien.trim()) { toast.error('Nama pasien wajib diisi untuk transaksi resep.'); return; }
-    if (items.some(i => !i.obat_id)) { toast.error('Lengkapi semua item obat terlebih dahulu.'); return; }
+    if (items.some(i => !i.obat_id)) { toast.error('Lengkapi semua item barang terlebih dahulu.'); return; }
     if (items.some(i => i.jumlah > i.stokTersedia)) { toast.error('Stok tidak mencukupi untuk satu atau lebih item.'); return; }
     if (metodeBayar === 'tunai' && jumlahDibayar < totalBayar) { toast.error('Jumlah uang yang dibayarkan kurang.'); return; }
 
@@ -560,6 +697,7 @@ function TransactionFormModal({
       tanggal: new Date().toISOString(),
       pasien: namaPasien.trim() || 'Pasien Umum',
       dokter: jenis === 'resep' ? dokter.trim() || 'Dokter Jaga' : null,
+      tipe_resep: jenis === 'resep' ? tipeResep : null,
       metode_bayar: metodeBayar,
       status: 'selesai',
       items: items.map(it => ({
@@ -573,16 +711,16 @@ function TransactionFormModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-3">
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-3 font-sans">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[95vh] overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0" style={{ background: `linear-gradient(135deg, ${PRIMARY}10, white)` }}>
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: PRIMARY }}>
-              <ShoppingCart size={16} className="text-white" />
+              <Package size={16} className="text-white" />
             </div>
             <div>
-              <h2 className="font-semibold text-gray-800 text-sm">Transaksi Obat Keluar Baru</h2>
-              <span className="text-xs text-slate-400">Kasir Pintar</span>
+              <h2 className="font-semibold text-gray-800 text-sm">Transaksi Keluar Baru</h2>
+              <span className="text-xs text-slate-400">Kasir Utama</span>
             </div>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
@@ -596,12 +734,24 @@ function TransactionFormModal({
                 <label className="block text-xs font-medium text-gray-600 mb-1">Jenis Transaksi *</label>
                 <select
                   value={jenis} onChange={e => setJenis(e.target.value as any)}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-emerald-400 bg-white"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-emerald-400 bg-white text-gray-800"
                 >
                   <option value="resep">Resep Dokter</option>
-                  <option value="otc">Obat Bebas (OTC)</option>
+                  <option value="otc">Barang Bebas / OTC</option>
                 </select>
               </div>
+              {jenis === 'resep' && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Tipe Resep *</label>
+                  <select
+                    value={tipeResep} onChange={e => setTipeResep(e.target.value as any)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-emerald-400 bg-white text-gray-800"
+                  >
+                    <option value="non-racik">Non-Racik (Standar)</option>
+                    <option value="racik">Racik (Campuran)</option>
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">
                   Nama Pasien {jenis === 'resep' ? '*' : '(opsional)'}
@@ -624,7 +774,7 @@ function TransactionFormModal({
                 />
               </div>
               {jenis === 'resep' && (
-                <div className="col-span-2">
+                <div className="col-span-2 md:col-span-3">
                   <label className="block text-xs font-medium text-gray-600 mb-1">Nama Dokter Peresep</label>
                   <input
                     type="text"
@@ -643,7 +793,7 @@ function TransactionFormModal({
                 <table className="w-full text-xs">
                   <thead className="bg-slate-50">
                     <tr className="border-b border-gray-100 bg-white">
-                      {['Nama Obat *', 'Stok Tersedia', 'Qty *', 'Harga Satuan (Rp)', 'Subtotal', 'Aksi'].map(h => (
+                      {['Nama Barang *', 'Stok Tersedia', 'Qty *', 'Harga Satuan (Rp)', 'Subtotal', 'Aksi'].map(h => (
                         <th key={h} className="text-left px-3 py-2.5 text-xs font-semibold text-gray-500 whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
@@ -654,16 +804,11 @@ function TransactionFormModal({
                       return (
                         <tr key={item.id} className={overStock ? 'bg-red-50' : ''}>
                           <td className="px-3 py-2 min-w-44">
-                            <select
+                            <SearchableDrugSelect
+                              drugs={drugs}
                               value={item.obat_id}
-                              onChange={e => selectDrug(item.id, e.target.value)}
-                              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:border-emerald-400 bg-white"
-                            >
-                              <option value="">Pilih obat…</option>
-                              {drugs.map(d => (
-                                <option key={d.id} value={d.id} disabled={d.stok <= 0}>{d.nama} ({d.kode}) - Stok: {d.stok}</option>
-                              ))}
-                            </select>
+                              onChange={val => selectDrug(item.id, val)}
+                            />
                           </td>
                           <td className="px-3 py-2">
                             {item.obat_id ? (
@@ -804,20 +949,44 @@ interface DetailModalProps {
   items: any[];
   loading: boolean;
   onClose: () => void;
-  onPrint: () => void;
+  onPrint: (jenisCetak?: 'nota' | 'resep' | 'copy_resep') => void;
   onRetur: () => void;
+  onRefreshHistory?: () => void;
 }
-function DetailModal({ record, items, loading, onClose, onPrint, onRetur }: DetailModalProps) {
+function DetailModal({ record, items, loading, onClose, onPrint, onRetur, onRefreshHistory }: DetailModalProps) {
+  const handlePrint = async (jenis: 'nota' | 'resep' | 'copy_resep') => {
+    try {
+      await obatKeluarApi.logCetak(record.id, jenis);
+      if (onRefreshHistory) {
+        onRefreshHistory();
+      }
+    } catch (err) {
+      console.error('Gagal mencatat riwayat cetak:', err);
+    }
+    onPrint(jenis);
+  };
+
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
           <div>
-            <h2 className="font-semibold text-gray-800 text-sm">Detail Transaksi Obat Keluar</h2>
+            <h2 className="font-semibold text-gray-800 text-sm">Detail Transaksi Keluar</h2>
             <code className="text-xs text-gray-500 font-mono">{record.no_transaksi}</code>
           </div>
           <div className="flex items-center gap-2">
-            <Badge text={JENIS_LABEL[record.jenis] || record.jenis} color={JENIS_COLOR[record.jenis] || 'bg-gray-100'} />
+            <Badge 
+              text={
+                record.jenis === 'resep'
+                  ? (record.tipe_resep === 'racik' ? 'Resep Racik' : (record.tipe_resep === 'non-racik' ? 'Resep Non-Racik' : 'Resep'))
+                  : (JENIS_LABEL[record.jenis] || record.jenis)
+              } 
+              color={
+                record.jenis === 'resep'
+                  ? (record.tipe_resep === 'racik' ? 'bg-indigo-100 text-indigo-700' : 'bg-blue-100 text-blue-700')
+                  : (JENIS_COLOR[record.jenis] || 'bg-gray-100')
+              } 
+            />
             <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={16} /></button>
           </div>
         </div>
@@ -853,7 +1022,7 @@ function DetailModal({ record, items, loading, onClose, onPrint, onRetur }: Deta
           )}
 
           <div>
-            <p className="text-xs font-semibold text-gray-600 mb-2">Detail Item Obat</p>
+            <p className="text-xs font-semibold text-gray-600 mb-2">Detail Item Barang</p>
             {loading ? (
               <div className="flex justify-center items-center py-6">
                 <Loader2 className="w-5 h-5 animate-spin text-emerald-600" />
@@ -864,7 +1033,7 @@ function DetailModal({ record, items, loading, onClose, onPrint, onRetur }: Deta
                 <table className="w-full text-xs">
                   <thead className="bg-slate-50">
                     <tr className="border-b border-gray-100">
-                      <th className="text-left px-3 py-2 text-gray-500">Nama Obat</th>
+                      <th className="text-left px-3 py-2 text-gray-500">Nama Barang</th>
                       <th className="text-center px-3 py-2 text-gray-500">Qty</th>
                       <th className="text-right px-3 py-2 text-gray-500">Harga Satuan</th>
                       <th className="text-right px-3 py-2 text-gray-500">Subtotal</th>
@@ -873,7 +1042,7 @@ function DetailModal({ record, items, loading, onClose, onPrint, onRetur }: Deta
                   <tbody className="divide-y divide-gray-50">
                     {items.map((it, i) => (
                       <tr key={i} className="hover:bg-gray-50/50">
-                        <td className="px-3 py-2 font-medium text-gray-800">{it.obat?.nama || 'Obat terhapus'}</td>
+                        <td className="px-3 py-2 font-medium text-gray-800">{it.obat?.nama || 'Barang terhapus'}</td>
                         <td className="px-3 py-2 text-center text-gray-700 font-mono">{it.jumlah} {it.obat?.satuan}</td>
                         <td className="px-3 py-2 text-right font-mono">{formatRupiah(it.harga)}</td>
                         <td className="px-3 py-2 text-right font-semibold text-gray-800 font-mono">{formatRupiah(it.subtotal)}</td>
@@ -884,6 +1053,7 @@ function DetailModal({ record, items, loading, onClose, onPrint, onRetur }: Deta
               </div>
             )}
           </div>
+
           <div className="flex justify-end">
             <div className="bg-gray-50 rounded-xl px-4 py-3 space-y-1 min-w-48">
               <div className="flex justify-between text-xs text-gray-500 font-mono">
@@ -892,25 +1062,72 @@ function DetailModal({ record, items, loading, onClose, onPrint, onRetur }: Deta
               </div>
             </div>
           </div>
+
+          {/* Riwayat Cetak */}
+          <div className="border-t border-gray-100 pt-4">
+            <p className="text-xs font-semibold text-gray-600 mb-2">Riwayat Cetak &amp; Salinan</p>
+            {record.riwayat_cetak && record.riwayat_cetak.length > 0 ? (
+              <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                {record.riwayat_cetak.map((log: any) => {
+                  const logLabel = log.jenis === 'nota' ? 'Nota Pembayaran' : (log.jenis === 'resep' ? 'Resep Asli' : 'Copy Resep');
+                  return (
+                    <div key={log.id} className="flex justify-between items-center text-[10px] bg-slate-50 border border-slate-100 rounded-lg p-2">
+                      <div>
+                        <span className="font-semibold text-slate-700">{logLabel}</span>
+                        <span className="text-slate-400 mx-1">•</span>
+                        <span className="text-slate-500">Oleh: {log.actor}</span>
+                      </div>
+                      <span className="text-slate-400 font-mono">
+                        {new Date(log.created_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400 italic">Belum ada riwayat cetak untuk transaksi ini.</p>
+            )}
+          </div>
         </div>
-        <div className="px-6 pb-5 flex gap-2 flex-shrink-0 border-t border-gray-100 pt-4">
+        <div className="px-6 pb-5 flex flex-wrap gap-2 flex-shrink-0 border-t border-gray-100 pt-4">
           {record.status === 'selesai' && (
             <button
               onClick={onRetur}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm border border-orange-200 text-orange-600 hover:bg-orange-50 transition-colors font-semibold"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-orange-200 text-orange-600 hover:bg-orange-50 transition-colors font-semibold"
             >
-              <RotateCcw size={13} /> Retur / Void
+              <RotateCcw size={12} /> Retur / Void
             </button>
           )}
-          <button
-            onClick={onPrint}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
-          >
-            <Printer size={13} /> Cetak Nota
-          </button>
+          
+          <div className="flex gap-1.5">
+            <button
+              onClick={() => handlePrint('nota')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              <Printer size={12} /> Nota
+            </button>
+
+            {record.dokter && (
+              <>
+                <button
+                  onClick={() => handlePrint('resep')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-indigo-200 text-indigo-600 hover:bg-indigo-50 transition-colors font-medium animate-pulse"
+                >
+                  <Printer size={12} /> Resep
+                </button>
+                <button
+                  onClick={() => handlePrint('copy_resep')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors font-medium"
+                >
+                  <Printer size={12} /> Copy Resep
+                </button>
+              </>
+            )}
+          </div>
+
           <button
             onClick={onClose}
-            className="ml-auto px-4 py-2 rounded-lg text-sm text-white hover:opacity-90 font-medium"
+            className="ml-auto px-4 py-1.5 rounded-lg text-xs text-white hover:opacity-90 font-medium"
             style={{ backgroundColor: PRIMARY }}
           >
             Tutup
@@ -944,13 +1161,13 @@ function ReturFormModal({ record, onSave, onClose }: { record: ApiObatKeluar; on
         </div>
         <div className="p-6 space-y-4">
           <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 text-xs text-orange-700">
-            Seluruh item obat dalam transaksi ini akan dikembalikan secara otomatis ke stok inventori setelah retur diproses.
+            Seluruh item barang dalam transaksi ini akan dikembalikan secara otomatis ke stok inventori setelah retur diproses.
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Alasan Retur / Pembatalan *</label>
             <textarea
               value={alasan} onChange={e => setAlasan(e.target.value)}
-              placeholder="Contoh: Salah resep, pasien membatalkan penebusan obat, dsb…"
+              placeholder="Contoh: Salah input barang, pasien membatalkan penebusan, dsb…"
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-orange-400 resize-none h-24"
             />
           </div>
@@ -973,48 +1190,94 @@ function ReturFormModal({ record, onSave, onClose }: { record: ApiObatKeluar; on
 
 /* ─── PRINT PREVIEW NOTA ────────────────────────────────────────────────── */
 function PrintPreviewModal({ record, onClose }: { record: any; onClose: () => void }) {
+  const isResep = record.jenisCetak === 'resep';
+  const isCopyResep = record.jenisCetak === 'copy_resep';
+
   return (
     <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <span className="font-semibold text-gray-800 text-sm">Preview Nota Pembayaran</span>
+          <span className="font-semibold text-gray-800 text-sm">
+            {isResep ? 'Preview Cetak Resep' : isCopyResep ? 'Preview Cetak Copy Resep' : 'Preview Nota Pembayaran'}
+          </span>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={16} /></button>
         </div>
-        <div className="p-5 font-mono text-xs space-y-1" id="nota-print">
+        <div className="p-6 font-mono text-xs space-y-1 bg-white text-gray-800" id="print-area-root">
           <div className="text-center mb-3">
             <p className="font-bold text-sm">KLINIK UTAMA CEMPAKA LIMA</p>
-            <p className="text-gray-500">Jl. Cempaka Lima, Banda Aceh</p>
+            <p className="text-[10px] text-gray-500">Jl. Cempaka Lima No. 9, Banda Aceh</p>
+            <p className="text-[10px] text-gray-400">Apoteker: Apt. Siti Rahmawati, S.Farm</p>
+            <p className="text-[10px] text-gray-400">SIPA: 19951012/SIPA-33.74/2022/2.42</p>
             <div className="border-t border-dashed border-gray-300 my-2" />
+            {isResep && <p className="font-bold text-xs bg-slate-100 py-1 rounded">SALINAN RESEP DOKTER</p>}
+            {isCopyResep && <p className="font-bold text-xs bg-slate-100 py-1 rounded text-indigo-800">APOGRAPH (COPY RESEP)</p>}
           </div>
-          <div className="space-y-0.5 text-gray-700">
-            <div className="flex justify-between"><span>No Nota</span><span className="font-bold">{record.noTransaksi}</span></div>
+
+          <div className="space-y-0.5 text-[10px] text-gray-700">
+            <div className="flex justify-between"><span>No Transaksi</span><span className="font-bold">{record.noTransaksi}</span></div>
             <div className="flex justify-between"><span>Tanggal</span><span>{record.tanggal ? new Date(record.tanggal).toLocaleString('id-ID') : '-'}</span></div>
             <div className="flex justify-between"><span>Pasien</span><span>{record.namaPasien}</span></div>
+            {record.noRekamMedis && <div className="flex justify-between"><span>No. RM</span><span className="font-mono">{record.noRekamMedis}</span></div>}
             {record.dokter && <div className="flex justify-between"><span>Dokter</span><span>{record.dokter}</span></div>}
-            <div className="flex justify-between"><span>Kasir</span><span>{record.petugas}</span></div>
+            <div className="flex justify-between"><span>Kasir/Apoteker</span><span>{record.petugas}</span></div>
           </div>
           <div className="border-t border-dashed border-gray-300 my-2" />
-          <div className="space-y-1">
-            {record.items?.map((it: any, i: number) => (
-              <div key={i}>
-                <p className="font-medium text-gray-800">{it.namaObat}</p>
-                <div className="flex justify-between text-gray-600 pl-2">
-                  <span>{it.jumlah} x {formatRupiah(it.hargaJual)}</span>
-                  <span>{formatRupiah(it.subtotal)}</span>
+
+          {isResep || isCopyResep ? (
+            <div className="space-y-3 py-1 font-serif text-[11px]">
+              {record.items?.map((it: any, i: number) => (
+                <div key={i} className="space-y-0.5">
+                  <div className="flex justify-between items-start">
+                    <span className="font-bold italic text-sm text-gray-900">R/</span>
+                    <div className="flex-1 pl-2">
+                      <p className="font-bold text-gray-900 text-[11px]">{it.namaObat}</p>
+                      <p className="text-[9px] text-gray-500 font-mono italic">S. 3 dd 1 Tab (3 Kali Sehari 1 Tablet)</p>
+                    </div>
+                    <span className="font-mono text-xs">No. {it.jumlah}</span>
+                  </div>
+                  {isCopyResep && (
+                    <div className="text-right text-[9px] font-bold text-indigo-700 italic font-mono pr-1">
+                      - detur -
+                    </div>
+                  )}
                 </div>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-1 text-[11px]">
+              {record.items?.map((it: any, i: number) => (
+                <div key={i}>
+                  <p className="font-medium text-gray-800">{it.namaObat}</p>
+                  <div className="flex justify-between text-gray-600 pl-2 text-[10px]">
+                    <span>{it.jumlah} {it.satuan || 'unit'} x {formatRupiah(it.hargaJual)}</span>
+                    <span>{formatRupiah(it.subtotal)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="border-t border-dashed border-gray-300 my-2" />
+
+          {!isResep && !isCopyResep ? (
+            <>
+              <div className="flex justify-between font-bold text-gray-800">
+                <span>TOTAL</span><span>{formatRupiah(record.totalBayar)}</span>
               </div>
-            ))}
-          </div>
-          <div className="border-t border-dashed border-gray-300 my-2" />
-          <div className="flex justify-between font-bold text-gray-800">
-            <span>TOTAL</span><span>{formatRupiah(record.totalBayar)}</span>
-          </div>
-          <div className="flex justify-between text-gray-600">
-            <span>Metode</span><span>{METODE_LABEL[record.metodeBayar] || record.metodeBayar}</span>
-          </div>
-          <div className="border-t border-dashed border-gray-300 my-2" />
-          <p className="text-center text-gray-400">Terima kasih atas kunjungan Anda</p>
-          <p className="text-center text-gray-400">Semoga lekas sembuh</p>
+              <div className="flex justify-between text-gray-600 text-[10px]">
+                <span>Metode</span><span>{METODE_LABEL[record.metodeBayar] || record.metodeBayar}</span>
+              </div>
+              <div className="border-t border-dashed border-gray-300 my-2" />
+              <p className="text-center text-gray-400 text-[9px]">Terima kasih atas kunjungan Anda</p>
+              <p className="text-center text-gray-400 text-[9px]">Semoga lekas sembuh</p>
+            </>
+          ) : (
+            <div className="pt-2 flex flex-col items-end text-[10px]">
+              <p className="italic text-gray-600 text-[9px]">p.c.c (pro copie conforme)</p>
+              <p className="mt-8 font-bold border-b border-gray-800 text-[10px]">{record.petugas}</p>
+              <p className="text-gray-400 text-[9px]">Apoteker Pengelola</p>
+            </div>
+          )}
         </div>
         <div className="px-5 pb-5 flex gap-2">
           <button onClick={onClose} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Tutup</button>

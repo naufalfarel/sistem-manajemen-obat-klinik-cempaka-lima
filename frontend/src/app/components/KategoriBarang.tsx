@@ -1,8 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { 
-  Plus, Search, MoreHorizontal, 
-  Download, FileSpreadsheet, 
-  FileText, Info, Edit2, Eye, Trash2, Loader2, RefreshCw
+  Plus, Search, 
+  Info, Edit2, Eye, Trash2, Loader2, RefreshCw, FileText, X
 } from 'lucide-react';
 import { kategoriApi, obatApi, type KategoriObat as ApiKategori, type Obat as ApiObat } from '../services/api';
 import { Button } from './ui/button';
@@ -15,32 +14,11 @@ import {
   TableHeader, 
   TableRow 
 } from './ui/table';
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuTrigger 
-} from './ui/dropdown-menu';
 import { Badge } from './ui/badge';
 import { Card, CardContent } from './ui/card';
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogFooter 
-} from './ui/dialog';
-import { 
-  Sheet, 
-  SheetContent, 
-  SheetHeader, 
-  SheetTitle, 
-  SheetDescription 
-} from './ui/sheet';
-import { Label } from './ui/label';
 import { toast } from 'sonner';
 
-export function KategoriObat() {
+export function KategoriBarang() {
   const [data, setData] = useState<ApiKategori[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -75,7 +53,7 @@ export function KategoriObat() {
       const res = await kategoriApi.list();
       setData(res.data);
     } catch (err: any) {
-      toast.error(err?.message || 'Gagal memuat kategori obat');
+      toast.error(err?.message || 'Gagal memuat kategori barang');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -144,7 +122,7 @@ export function KategoriObat() {
       setCategoryDrugs(res.data);
     } catch (err: any) {
       console.error(err);
-      toast.error('Gagal memuat daftar obat untuk kategori ini');
+      toast.error('Gagal memuat daftar barang untuk kategori ini');
     } finally {
       setLoadingDrugs(false);
     }
@@ -175,7 +153,7 @@ export function KategoriObat() {
 
   const handleDelete = async (category: ApiKategori) => {
     if (category.jumlah_obat > 0) {
-      toast.error(`Kategori tidak dapat dihapus karena masih memiliki ${category.jumlah_obat} obat terkait.`);
+      toast.error(`Kategori tidak dapat dihapus karena masih memiliki ${category.jumlah_obat} barang terkait.`);
       return;
     }
 
@@ -197,8 +175,8 @@ export function KategoriObat() {
       {/* Header */}
       <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Kategori Obat</h1>
-          <p className="text-slate-500">Kelola pengelompokan obat berdasarkan fungsi dan sediaan.</p>
+          <h1 className="text-2xl font-bold text-slate-800">Kategori Barang</h1>
+          <p className="text-slate-500">Kelola pengelompokan barang/obat berdasarkan fungsi dan sediaan.</p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -218,7 +196,7 @@ export function KategoriObat() {
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <StatCard title="Total Kategori" value={loading ? '...' : stats.total} icon={<Info className="text-blue-600" />} />
-        <StatCard title="Total Item Obat" value={loading ? '...' : stats.totalObat} icon={<FileText className="text-amber-600" />} />
+        <StatCard title="Total Item Barang" value={loading ? '...' : stats.totalObat} icon={<FileText className="text-amber-600" />} />
       </div>
 
       {/* Toolbar */}
@@ -253,7 +231,7 @@ export function KategoriObat() {
                   <TableHead>Nama Kategori</TableHead>
                   <TableHead>Kode</TableHead>
                   <TableHead>Deskripsi</TableHead>
-                  <TableHead>Jumlah Obat</TableHead>
+                  <TableHead>Jumlah Barang</TableHead>
                   <TableHead>Tanggal Dibuat</TableHead>
                   <TableHead className="text-right">Aksi</TableHead>
                 </TableRow>
@@ -268,34 +246,36 @@ export function KategoriObat() {
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <span className="font-medium">{category.jumlah_obat}</span>
-                          <span className="text-xs text-slate-400">Obat</span>
+                          <span className="text-xs text-slate-400">Barang</span>
                         </div>
                       </TableCell>
                       <TableCell className="text-slate-500 text-sm">
                         {category.created_at ? new Date(category.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-'}
                       </TableCell>
                       <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreHorizontal className="w-4 h-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-40">
-                            <DropdownMenuItem onClick={() => handleViewDetail(category)} className="gap-2 cursor-pointer">
-                              <Eye className="w-4 h-4 text-blue-500" /> Detail
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleEdit(category)} className="gap-2 cursor-pointer">
-                              <Edit2 className="w-4 h-4 text-emerald-500" /> Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              onClick={() => handleDelete(category)} 
-                              className="gap-2 cursor-pointer text-red-600 hover:text-red-700"
-                            >
-                              <Trash2 className="w-4 h-4" /> Hapus
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => handleViewDetail(category)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                            title="Detail"
+                          >
+                            <Eye className="w-4.5 h-4.5" />
+                          </button>
+                          <button
+                            onClick={() => handleEdit(category)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 transition-colors"
+                            title="Ubah"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(category)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                            title="Hapus"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
@@ -352,110 +332,139 @@ export function KategoriObat() {
       </div>
 
       {/* Add/Edit Modal */}
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>{editingCategory ? 'Edit Kategori' : 'Tambah Kategori Baru'}</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="nama">Nama Kategori*</Label>
-                <Input 
-                  id="nama" 
-                  value={formData.nama} 
-                  onChange={e => setFormData({ ...formData, nama: e.target.value })}
-                  placeholder="Contoh: Analgesik"
-                  required
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <h2 className="font-semibold text-slate-800 text-sm">
+                {editingCategory ? 'Edit Kategori' : 'Tambah Kategori Baru'}
+              </h2>
+              <button 
+                onClick={() => setIsModalOpen(false)} 
+                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="block text-xs font-semibold text-slate-500">Nama Kategori *</label>
+                  <input
+                    value={formData.nama}
+                    onChange={e => setFormData({ ...formData, nama: e.target.value })}
+                    placeholder="Contoh: Analgesik"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-emerald-500"
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-xs font-semibold text-slate-500">Kode Kategori *</label>
+                  <input
+                    value={formData.kode}
+                    onChange={e => setFormData({ ...formData, kode: e.target.value })}
+                    placeholder="KTG-01"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-emerald-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-semibold text-slate-500">Deskripsi</label>
+                <input
+                  value={formData.deskripsi}
+                  onChange={e => setFormData({ ...formData, deskripsi: e.target.value })}
+                  placeholder="Penjelasan singkat kategori"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-emerald-500"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="kode">Kode Kategori*</Label>
-                <Input 
-                  id="kode" 
-                  value={formData.kode} 
-                  onChange={e => setFormData({ ...formData, kode: e.target.value })}
-                  placeholder="KTG-01"
-                  required
-                />
+
+              <div className="flex gap-2 border-t border-slate-50 pt-4 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-50"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-lg text-sm text-white font-semibold hover:opacity-90 bg-emerald-600 hover:bg-emerald-700"
+                >
+                  Simpan Kategori
+                </button>
               </div>
-            </div>
+            </form>
+          </div>
+        </div>
+      )}
 
-            <div className="space-y-2">
-              <Label htmlFor="deskripsi">Deskripsi</Label>
-              <Input 
-                id="deskripsi" 
-                value={formData.deskripsi} 
-                onChange={e => setFormData({ ...formData, deskripsi: e.target.value })}
-                placeholder="Penjelasan singkat kategori"
-              />
-            </div>
-
-            <DialogFooter className="pt-4">
-              <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>Batal</Button>
-              <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700">Simpan Kategori</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Detail Drawer */}
-      <Sheet open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
-        <SheetContent className="sm:max-w-[450px]">
-          <SheetHeader className="border-b pb-4">
-            <div>
-              <SheetTitle className="text-xl">{selectedCategory?.nama}</SheetTitle>
-              <SheetDescription>Detail dan daftar obat dalam kategori ini</SheetDescription>
-            </div>
-          </SheetHeader>
-          
-          <div className="py-6 space-y-6">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-3 bg-slate-50 rounded-lg">
-                <p className="text-xs text-slate-500 font-medium uppercase">Kode</p>
-                <p className="text-sm font-semibold">{selectedCategory?.kode}</p>
+      {/* Detail Drawer (Right side flyout) */}
+      {isDrawerOpen && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex justify-end">
+          <div className="bg-white w-full max-w-md h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <div>
+                <h2 className="font-semibold text-slate-800 text-sm">{selectedCategory?.nama}</h2>
+                <p className="text-xs text-slate-400">Detail dan daftar barang dalam kategori ini</p>
               </div>
-              <div className="p-3 bg-slate-50 rounded-lg">
-                <p className="text-xs text-slate-500 font-medium uppercase">Jumlah Obat</p>
-                <p className="text-sm font-semibold">{selectedCategory?.jumlah_obat} Item</p>
+              <button 
+                onClick={() => setIsDrawerOpen(false)} 
+                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-6 flex-1 overflow-y-auto">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-3 bg-slate-50 rounded-lg">
+                  <p className="text-xs text-slate-400 font-medium uppercase">Kode</p>
+                  <p className="text-sm font-semibold text-slate-700">{selectedCategory?.kode}</p>
+                </div>
+                <div className="p-3 bg-slate-50 rounded-lg">
+                  <p className="text-xs text-slate-400 font-medium uppercase">Jumlah Barang</p>
+                  <p className="text-sm font-semibold text-slate-700">{selectedCategory?.jumlah_obat} Item</p>
+                </div>
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <p className="text-xs text-slate-500 font-medium uppercase">Deskripsi</p>
-              <p className="text-sm text-slate-700">{selectedCategory?.deskripsi || '-'}</p>
-            </div>
+              <div className="space-y-1">
+                <p className="text-xs text-slate-400 font-medium uppercase">Deskripsi</p>
+                <p className="text-sm text-slate-600">{selectedCategory?.deskripsi || '-'}</p>
+              </div>
 
-            <div className="space-y-4 pt-4 border-t">
-              <h3 className="font-semibold text-slate-800 flex items-center gap-2">
-                <FileText className="w-4 h-4 text-emerald-600" /> Daftar Obat terkait
-              </h3>
-              <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
-                {loadingDrugs ? (
-                  <div className="flex justify-center items-center py-8">
-                    <Loader2 className="w-5 h-5 animate-spin text-emerald-600" />
-                    <span className="ml-2 text-xs text-slate-500">Memuat obat...</span>
-                  </div>
-                ) : categoryDrugs.length > 0 ? (
-                  categoryDrugs.map(drug => (
-                    <div key={drug.id} className="flex items-center justify-between p-3 border rounded-lg hover:border-emerald-200 hover:bg-emerald-50 transition-colors">
-                      <div>
-                        <p className="text-sm font-medium">{drug.nama}</p>
-                        <p className="text-xs text-slate-500">{drug.kode} • {drug.satuan}</p>
-                      </div>
-                      <Badge variant="outline" className="text-[10px] h-5 bg-white">Stok: {drug.stok}</Badge>
+              <div className="space-y-4 pt-4 border-t">
+                <h3 className="font-semibold text-slate-800 flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-emerald-600" /> Daftar Barang terkait
+                </h3>
+                <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
+                  {loadingDrugs ? (
+                    <div className="flex justify-center items-center py-8">
+                      <Loader2 className="w-5 h-5 animate-spin text-emerald-600" />
+                      <span className="ml-2 text-xs text-slate-500">Memuat barang...</span>
                     </div>
-                  ))
-                ) : (
-                  <div className="text-center py-8 text-slate-400">
-                    <p className="text-sm">Belum ada obat dalam kategori ini</p>
-                  </div>
-                )}
+                  ) : categoryDrugs.length > 0 ? (
+                    categoryDrugs.map(drug => (
+                      <div key={drug.id} className="flex items-center justify-between p-3 border rounded-lg hover:border-emerald-200 hover:bg-emerald-50 transition-colors">
+                        <div>
+                          <p className="text-sm font-medium text-slate-800">{drug.nama}</p>
+                          <p className="text-xs text-slate-500">{drug.kode} • {drug.satuan}</p>
+                        </div>
+                        <Badge variant="outline" className="text-[10px] h-5 bg-white">Stok: {drug.stok}</Badge>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8 text-slate-400">
+                      <p className="text-sm">Belum ada barang dalam kategori ini</p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </SheetContent>
-      </Sheet>
+        </div>
+      )}
     </div>
   );
 }

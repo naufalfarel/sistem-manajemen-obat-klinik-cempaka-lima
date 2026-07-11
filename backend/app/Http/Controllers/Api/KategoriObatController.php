@@ -8,18 +8,31 @@ use App\Http\Requests\Kategori\UpdateKategoriRequest;
 use App\Http\Resources\KategoriObatResource;
 use App\Models\KategoriObat;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class KategoriObatController extends Controller
 {
     /**
      * GET /api/kategori
      *
-     * Tidak paginasi - sesuai api.ts (`kategoriApi.list` mengembalikan
-     * `ApiResponse<KategoriObat[]>`, bukan `Paginated<KategoriObat>`).
+     * Tidak paginasi default - sesuai api.ts (`kategoriApi.list` mengembalikan
+     * `ApiResponse<KategoriObat[]>`, jika paginated mengembalikan `Paginated<KategoriObat>`).
      */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $kategori = KategoriObat::query()->withCount('obat')->orderBy('nama')->get();
+        $query = KategoriObat::query()->withCount('obat')->orderBy('nama');
+
+        if ($search = $request->string('search')->trim()->value()) {
+            $query->where('nama', 'like', "%{$search}%")
+                  ->orWhere('kode', 'like', "%{$search}%");
+        }
+
+        if ($request->boolean('paginate') || $request->has('page')) {
+            $perPage = min((int) $request->integer('per_page', 10), 100) ?: 10;
+            return KategoriObatResource::collection($query->paginate($perPage))->response();
+        }
+
+        $kategori = $query->get();
 
         return response()->json(['data' => KategoriObatResource::collection($kategori)]);
     }

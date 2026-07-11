@@ -19,7 +19,13 @@ class DashboardController extends Controller
     public function summary(Request $request): JsonResponse
     {
         $today = Carbon::today();
-        $expiredDays = $request->integer('expired_days', 30);
+
+        // Ambil ambang batas dari pengaturan stok
+        $stokSettings = \App\Models\Setting::query()->where('category', 'stok')->value('data');
+        $stokSettings = is_array($stokSettings) ? $stokSettings : \App\Models\Setting::defaults()['stok'];
+
+        $defaultExpiredDays = (int) ($stokSettings['near_30'] ?? 30);
+        $expiredDays = $request->integer('expired_days', $defaultExpiredDays);
 
         // Agregasi dasar menggunakan DB query / Eloquent secara efisien
         $totalJenisObat = Obat::query()->where('status', 'aktif')->count();
@@ -42,23 +48,26 @@ class DashboardController extends Controller
             ->whereYear('tanggal', $today->year)
             ->count();
 
-        // Perhitungan status stok & expired secara efisien langsung di DB
+        // Perhitungan status stok secara efisien langsung di DB dengan fallback ke stok_minimum_default
+        $stokMinimumDefault = (int) ($stokSettings['stok_minimum_default'] ?? 10);
         $stokKritis = Obat::query()
             ->where('status', 'aktif')
-            ->where(function ($q) {
-                $q->whereColumn('stok', '<=', 'stok_minimum');
+            ->where(function ($q) use ($stokMinimumDefault) {
+                $q->whereRaw('stok <= COALESCE(stok_minimum, ?)', [$stokMinimumDefault]);
             })
             ->count();
 
         $expired = Obat::query()
             ->where('status', 'aktif')
             ->whereNotNull('expired_date')
+            ->where('stok', '>', 0)
             ->where('expired_date', '<', $today->toDateString())
             ->count();
 
         $near30 = Obat::query()
             ->where('status', 'aktif')
             ->whereNotNull('expired_date')
+            ->where('stok', '>', 0)
             ->where('expired_date', '>=', $today->toDateString())
             ->where('expired_date', '<=', $today->copy()->addDays(30)->toDateString())
             ->count();
@@ -66,6 +75,7 @@ class DashboardController extends Controller
         $nearExpired = Obat::query()
             ->where('status', 'aktif')
             ->whereNotNull('expired_date')
+            ->where('stok', '>', 0)
             ->where('expired_date', '>=', $today->toDateString())
             ->where('expired_date', '<=', $today->copy()->addDays($expiredDays)->toDateString())
             ->count();

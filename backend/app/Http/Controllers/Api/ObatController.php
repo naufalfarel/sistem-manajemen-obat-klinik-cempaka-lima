@@ -12,6 +12,7 @@ use App\Services\AuditLogger;
 use App\Services\NomorGenerator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
 
 class ObatController extends Controller
@@ -39,7 +40,20 @@ class ObatController extends Controller
         $query->when($request->filled('status'), fn ($q) => $q->where('status', $request->string('status')));
 
         if ($request->boolean('stok_kritis')) {
-            $query->whereColumn('stok', '<=', 'stok_minimum');
+            $settings = \App\Models\Setting::query()->where('category', 'stok')->value('data');
+            $defaultMin = (int) ($settings['stok_minimum_default'] ?? 10);
+            $query->where(function($q) use ($defaultMin) {
+                $q->where(function($sub) {
+                    $sub->whereNotNull('stok_minimum')
+                        ->where('stok_minimum', '>', 0)
+                        ->whereColumn('stok', '<=', 'stok_minimum');
+                })->orWhere(function($sub) use ($defaultMin) {
+                    $sub->where(function($s) {
+                        $s->whereNull('stok_minimum')
+                          ->orWhere('stok_minimum', '<=', 0);
+                    })->whereColumn('stok', '<=', \Illuminate\Support\Facades\DB::raw($defaultMin));
+                });
+            });
         }
 
         $sort = in_array($request->string('sort')->value(), self::SORTABLE, true)
@@ -146,5 +160,93 @@ class ObatController extends Controller
         AuditLogger::ekspor('obat', "Mengekspor data master obat (format: {$format})");
 
         return Excel::download(new ObatExport, "data-obat.{$format}", $writerType);
+    }
+
+    /**
+     * GET /api/obat/{obat}/kartu-stok
+     */
+    public function kartuStok(Obat $obat): JsonResponse
+    {
+        // 1. Ambil transaksi masuk yang sudah diterima
+        $masuk = DB::table('obat_masuk_items')
+            ->join('obat_masuk', 'obat_masuk_items.obat_masuk_id', '=', 'obat_masuk.id')
+            ->where('obat_masuk_items.obat_id', $obat->id)
+            ->where('obat_masuk.status', 'diterima')
+            ->select([
+                'obat_masuk.tanggal as tanggal',
+                'obat_masuk.no_transaksi as referensi',
+                'obat_masuk_items.jumlah as masuk',
+                DB::raw('0 as keluar'),
+                DB::raw('"masuk" as tipe'),
+                'obat_masuk.created_at as created_at'
+            ])
+            ->get();
+
+        // 2. Ambil transaksi keluar yang selesai
+        $keluar = DB::table('obat_keluar_items')
+            ->join('obat_keluar', 'obat_keluar_items.obat_keluar_id', '=', 'obat_keluar.id')
+            ->where('obat_keluar_items.obat_id', $obat->id)
+            ->where('obat_keluar.status', 'selesai')
+            ->select([
+                'obat_keluar.tanggal as tanggal',
+                'obat_keluar.no_transaksi as referensi',
+                DB::raw('0 as masuk'),
+                'obat_keluar_items.jumlah as keluar',
+                DB::raw('"keluar" as tipe'),
+                'obat_keluar.created_at as created_at'
+            ])
+            ->get();
+
+        // 3. Ambil revisi stok — hitung delta masuk/keluar yang benar per tipe:
+        //    - tambah : masuk = jumlah (delta yg ditambahkan)
+        //    - kurang : keluar = jumlah (delta yg dikurangkan)
+        //    - set    : selisih = stok_sesudah - stok_sebelum
+        //               jika selisih > 0 → masuk = selisih ; jika selisih < 0 → keluar = |selisih|
+        $revisi = DB::table('stok_revisi')
+            ->where('obat_id', $obat->id)
+            ->select([
+                'tanggal as tanggal',
+                'no_revisi as referensi',
+                DB::raw('
+                    CASE
+                        WHEN tipe = "tambah" THEN jumlah
+                        WHEN tipe = "set" AND (stok_sesudah - stok_sebelum) > 0 THEN (stok_sesudah - stok_sebelum)
+                        ELSE 0
+                    END as masuk
+                '),
+                DB::raw('
+                    CASE
+                        WHEN tipe = "kurang" THEN jumlah
+                        WHEN tipe = "set" AND (stok_sesudah - stok_sebelum) < 0 THEN ABS(stok_sesudah - stok_sebelum)
+                        ELSE 0
+                    END as keluar
+                '),
+                DB::raw('"revisi" as tipe'),
+                'created_at as created_at',
+            ])
+            ->get();
+
+        // 4. Gabungkan dan urutkan
+        $merged = $masuk->merge($keluar)->merge($revisi)->sortBy(function ($item) {
+            return $item->tanggal . ' ' . $item->created_at;
+        })->values();
+
+        // 5. Hitung saldo berjalan
+        $saldo = 0;
+        $kartuStok = $merged->map(function ($item) use (&$saldo) {
+            $saldo += ($item->masuk - $item->keluar);
+            return [
+                'tanggal'  => $item->tanggal,
+                'referensi'=> $item->referensi,
+                'masuk'    => (int) $item->masuk,
+                'keluar'   => (int) $item->keluar,
+                'tipe'     => $item->tipe,
+                'saldo'    => $saldo,
+            ];
+        });
+
+        return response()->json([
+            'data' => $kartuStok
+        ]);
     }
 }

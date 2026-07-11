@@ -15,8 +15,11 @@ class ResetPasswordRequest extends FormRequest
     /** @return array<string, mixed> */
     public function rules(): array
     {
+        $settings = \App\Models\Setting::query()->where('category', 'keamanan')->value('data');
+        $min = (int) ($settings['panjang_password_minimum'] ?? 8);
+
         return [
-            'password' => ['required', 'string', 'confirmed', Password::min(8)],
+            'password' => ['required', 'string', 'confirmed', Password::min($min)],
         ];
     }
 }

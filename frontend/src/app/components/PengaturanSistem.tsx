@@ -440,6 +440,19 @@ export function PengaturanSistem() {
                     />
                   </div>
                   <div>
+                    <label className={labelClass}>Default Role User Baru</label>
+                    <select
+                      value={keamanan.default_role_pengguna_baru || 'kasir'}
+                      onChange={e => setKeamanan(p => ({ ...p, default_role_pengguna_baru: e.target.value }))}
+                      className={inputClass + ' bg-white'}
+                    >
+                      <option value="admin">Administrator</option>
+                      <option value="apoteker">Apoteker</option>
+                      <option value="staf-gudang">Staf Gudang</option>
+                      <option value="kasir">Kasir</option>
+                    </select>
+                  </div>
+                  <div>
                     <label className={labelClass}>Maks. Percobaan Login Salah</label>
                     <input
                       type="number"

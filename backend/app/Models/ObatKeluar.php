@@ -45,6 +45,7 @@ class ObatKeluar extends Model
         'status',
         'alasan_retur_void',
         'kasir_id',
+        'tipe_resep',
     ];
 
     protected function casts(): array
@@ -65,5 +66,11 @@ class ObatKeluar extends Model
     public function items(): HasMany
     {
         return $this->hasMany(ObatKeluarItem::class, 'obat_keluar_id');
+    }
+
+    /** @return HasMany<RiwayatCetak, $this> */
+    public function riwayatCetak(): HasMany
+    {
+        return $this->hasMany(RiwayatCetak::class, 'obat_keluar_id');
     }
 }

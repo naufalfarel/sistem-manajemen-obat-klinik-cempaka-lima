@@ -88,4 +88,10 @@ class Obat extends Model
     {
         return $this->hasMany(ObatKeluarItem::class, 'obat_id');
     }
+
+    /** @return HasMany<RiwayatHarga, $this> */
+    public function riwayatHarga(): HasMany
+    {
+        return $this->hasMany(RiwayatHarga::class, 'obat_id');
+    }
 }

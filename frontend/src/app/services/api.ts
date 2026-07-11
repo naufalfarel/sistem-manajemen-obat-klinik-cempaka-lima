@@ -236,6 +236,7 @@ export interface ObatKeluar {
   tanggal:       string;
   pasien:        string;
   dokter:        string | null;
+  tipe_resep:    'racik' | 'non-racik' | null;
   metode_bayar:  'cash' | 'qris' | 'debit' | 'kredit' | 'bpjs';
   total:         number;
   status:        'selesai' | 'retur' | 'void';
@@ -243,6 +244,7 @@ export interface ObatKeluar {
   kasir:         Pick<AuthUser, 'id' | 'nama'>;
   items:         ObatKeluarItem[];
   created_at:    string;
+  riwayat_cetak?: { id: number; jenis: 'nota' | 'resep' | 'copy_resep'; actor: string; created_at: string }[];
 }
 
 export interface AuditLogEntry {
@@ -293,6 +295,12 @@ export const authApi = {
 
   /** POST /auth/refresh */
   refresh: () => request<{ token: string }>('POST', '/auth/refresh'),
+
+  /** POST /auth/profile */
+  updateProfile: (data: FormData) => request<ApiResponse<AuthUser>>('POST', '/auth/profile', data),
+
+  /** PATCH /auth/password */
+  updatePassword: (data: any) => request<void>('PATCH', '/auth/password', data),
 };
 
 /* ── Obat (Master Drug) ─────────────────────────────────────────────────────── */
@@ -318,6 +326,7 @@ export const obatApi = {
     request<ApiResponse<Obat>>(data instanceof FormData ? 'POST' : 'PUT', `/obat/${id}`, data),
   delete: (id: number)                  => request<void>('DELETE', `/obat/${id}`),
   export: (format: 'csv' | 'xlsx')     => `${API_BASE}/obat/export?format=${format}&token=${token.get()}`,
+  kartuStok: (id: number)               => request<ApiResponse<any[]>>('GET', `/obat/${id}/kartu-stok`),
 };
 
 /* ── Kategori ───────────────────────────────────────────────────────────────── */
@@ -376,6 +385,8 @@ export const obatMasukApi = {
   terima: (id: number) =>
     request<ApiResponse<ObatMasuk>>('PATCH', `/obat-masuk/${id}/terima`),
   delete: (id: number) => request<void>('DELETE', `/obat-masuk/${id}`),
+  checkFaktur: (supplierId: number, faktur: string) =>
+    request<{ exists: boolean }>('GET', `/obat-masuk/check-faktur${qs({ supplier_id: supplierId, faktur })}`),
 };
 
 /* ── Obat Keluar (Dispensing) ───────────────────────────────────────────────── */
@@ -388,17 +399,20 @@ export interface ObatKeluarFilters {
   dari?:       string;
   sampai?:     string;
   kasir_id?:   number;
+  jenis?:      string;
 }
 
 export const obatKeluarApi = {
   list:   (f?: ObatKeluarFilters) => request<Paginated<ObatKeluar>>('GET', `/obat-keluar${qs(f ?? {})}`),
   get:    (id: number)            => request<ApiResponse<ObatKeluar>>('GET', `/obat-keluar/${id}`),
-  create: (data: Omit<ObatKeluar, 'id' | 'no_transaksi' | 'total' | 'kasir' | 'created_at'> & { items: Omit<ObatKeluarItem, 'obat' | 'subtotal'>[] }) =>
+  create: (data: Omit<ObatKeluar, 'id' | 'no_transaksi' | 'total' | 'kasir' | 'created_at' | 'riwayat_cetak'> & { items: Omit<ObatKeluarItem, 'obat' | 'subtotal'>[] }) =>
     request<ApiResponse<ObatKeluar>>('POST', '/obat-keluar', data),
   retur:  (id: number, alasan: string) =>
     request<ApiResponse<ObatKeluar>>('PATCH', `/obat-keluar/${id}/retur`, { alasan }),
   void:   (id: number, alasan: string) =>
     request<ApiResponse<ObatKeluar>>('PATCH', `/obat-keluar/${id}/void`, { alasan }),
+  logCetak: (id: number, jenis: 'nota' | 'resep' | 'copy_resep') =>
+    request<ApiResponse<any>>('POST', `/obat-keluar/${id}/cetak`, { jenis }),
 };
 
 /* ── Monitoring Stok & Expired ──────────────────────────────────────────────── */
@@ -449,6 +463,16 @@ export const laporanApi = {
     format === 'json'
       ? request<ApiResponse<{ total_item_masuk: number; nilai_item_masuk: number; total_item_keluar: number; nilai_item_keluar: number; chart: any[] }>>('GET', `/laporan/logistik${qs({ dari, sampai })}`)
       : `${API_BASE}/laporan/logistik/export${qs({ dari, sampai, format, token: token.get() })}`,
+  analisis: (dari: string, sampai: string, format: 'json' | 'csv' | 'pdf' = 'json') =>
+    format === 'json'
+      ? request<ApiResponse<{
+          nilai_inventaris: number;
+          paling_sering_keluar: any[];
+          tercepat_habis: any[];
+          expired_barang: any[];
+          dibuang_barang: any[];
+        }>>('GET', `/laporan/analisis${qs({ dari, sampai })}`)
+      : `${API_BASE}/laporan/analisis/export${qs({ dari, sampai, format, token: token.get() })}`,
 };
 
 /* ── Pengguna (User Management) ─────────────────────────────────────────────── */
@@ -553,3 +577,132 @@ export const dashboardApi = {
   stockByKategori: () =>
     request<ApiResponse<{ name: string; value: number }[]>>('GET', '/dashboard/stok-per-kategori'),
 };
+
+/* ── Harga Barang ───────────────────────────────────────────────────────────── */
+
+export interface HargaBarangItem {
+  id: number;
+  kode: string;
+  nama: string;
+  kategori: { id: number; nama: string } | null;
+  satuan: string;
+  harga_beli: number;
+  harga_jual: number;
+  margin: number;
+  margin_persen: number;
+  tanggal_diubah: string;
+  has_proposal: boolean;
+  proposals_count: number;
+}
+
+export interface HargaProposal {
+  id: number;
+  obat: {
+    id: number;
+    nama: string;
+    kode: string;
+    harga_beli_sekarang: number;
+    harga_jual_sekarang: number;
+  } | null;
+  user: { id: number; nama: string } | null;
+  harga_beli_lama: number;
+  harga_beli_baru: number;
+  harga_jual_lama: number;
+  harga_jual_baru: number;
+  sumber: string;
+  no_transaksi: string | null;
+  tanggal_diusulkan: string;
+}
+
+export interface HargaLog {
+  id: number;
+  user: { id: number; nama: string } | null;
+  harga_beli_lama: number;
+  harga_beli_baru: number;
+  harga_jual_lama: number;
+  harga_jual_baru: number;
+  sumber: string;
+  no_transaksi: string | null;
+  tanggal: string;
+}
+
+export interface HargaBarangFilters {
+  page?: number;
+  per_page?: number;
+  search?: string;
+  kategori_id?: number;
+}
+
+export const hargaBarangApi = {
+  list: (f?: HargaBarangFilters) =>
+    request<Paginated<HargaBarangItem>>('GET', `/harga-barang${qs(f ?? {})}`),
+  update: (id: number, data: { harga_beli: number; harga_jual: number }) =>
+    request<ApiResponse<any>>('PUT', `/harga-barang/${id}`, data),
+  listProposals: () =>
+    request<ApiResponse<HargaProposal[]>>('GET', '/harga-barang/proposals'),
+  confirmProposal: (id: number) =>
+    request<ApiResponse<any>>('POST', `/harga-barang/proposals/${id}/confirm`),
+  rejectProposal: (id: number) =>
+    request<ApiResponse<any>>('POST', `/harga-barang/proposals/${id}/reject`),
+  getHistory: (id: number) =>
+    request<ApiResponse<HargaLog[]>>('GET', `/harga-barang/${id}/history`),
+};
+
+/* ── Revisi / Penyesuaian Stok ─────────────────────────────────────────────── */
+
+export type RevisiTipe   = 'tambah' | 'kurang' | 'set';
+export type RevisiAlasan =
+  | 'rusak'
+  | 'kadaluarsa'
+  | 'hilang'
+  | 'temuan'
+  | 'koreksi_sistem'
+  | 'penerimaan_lain'
+  | 'lainnya';
+
+export interface StokRevisi {
+  id:           number;
+  no_revisi:    string;
+  obat_id:      number;
+  petugas_id:   number;
+  tanggal:      string;
+  tipe:         RevisiTipe;
+  stok_sebelum: number;
+  jumlah:       number;
+  stok_sesudah: number;
+  alasan:       RevisiAlasan;
+  catatan:      string | null;
+  obat?:        { id: number; nama: string; kode: string; satuan: string };
+  petugas?:     { id: number; nama: string };
+  created_at:   string;
+}
+
+export interface StokRevisiFilters {
+  page?:     number;
+  per_page?: number;
+  search?:   string;
+  obat_id?:  number;
+  tipe?:     RevisiTipe;
+  alasan?:   RevisiAlasan;
+  dari?:     string;
+  sampai?:   string;
+}
+
+export interface StokRevisiPayload {
+  obat_id: number;
+  tipe:    RevisiTipe;
+  jumlah:  number;
+  alasan:  RevisiAlasan;
+  catatan?: string;
+  tanggal?: string;
+}
+
+export const stokRevisiApi = {
+  list:   (f?: StokRevisiFilters) =>
+    request<Paginated<StokRevisi>>('GET', `/stok-revisi${qs(f ?? {})}`),
+  create: (data: StokRevisiPayload) =>
+    request<ApiResponse<StokRevisi>>('POST', '/stok-revisi', data),
+  get:    (id: number) =>
+    request<ApiResponse<StokRevisi>>('GET', `/stok-revisi/${id}`),
+};
+

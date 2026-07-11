@@ -16,6 +16,7 @@ class LaporanKadaluarsaExport implements FromCollection, WithHeadings, WithMappi
         return Obat::query()
             ->where('status', 'aktif')
             ->whereNotNull('expired_date')
+            ->where('stok', '>', 0)
             ->orderBy('expired_date')
             ->get();
     }

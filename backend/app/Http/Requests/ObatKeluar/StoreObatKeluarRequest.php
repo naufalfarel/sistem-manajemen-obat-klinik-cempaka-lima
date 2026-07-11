@@ -44,6 +44,7 @@ class StoreObatKeluarRequest extends FormRequest
             'tanggal' => ['required', 'date'],
             'pasien' => ['required', 'string', 'max:255'],
             'dokter' => ['nullable', 'string', 'max:255'],
+            'tipe_resep' => ['nullable', 'string', 'in:racik,non-racik'],
             'metode_bayar' => ['required', Rule::in(ObatKeluar::METODE_BAYAR)],
             'kasir_id' => ['required', 'integer', 'exists:users,id'],
 

@@ -29,9 +29,14 @@ class UserObserver
             return;
         }
 
-        $description = array_key_exists('password', $diff['after'])
-            ? "Reset password pengguna: {$user->nama} ({$user->username})"
-            : "Mengubah data pengguna: {$user->nama} ({$user->username})";
+        if (array_key_exists('status', $diff['after'])) {
+            $statusStr = $diff['after']['status'] === 'aktif' ? 'Mengaktifkan' : 'Menonaktifkan';
+            $description = "{$statusStr} pengguna: {$user->nama} ({$user->username})";
+        } elseif (array_key_exists('password', $diff['after'])) {
+            $description = "Reset password pengguna: {$user->nama} ({$user->username})";
+        } else {
+            $description = "Mengubah data pengguna: {$user->nama} ({$user->username})";
+        }
 
         AuditLogger::ubah(module: 'pengguna', description: $description, before: $before, after: $after);
     }

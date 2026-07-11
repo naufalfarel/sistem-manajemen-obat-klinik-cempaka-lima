@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 
 const PRIMARY = '#0F9D74';
 
-type TabKey = 'transaksi' | 'logistik' | 'persediaan' | 'expired';
+type TabKey = 'transaksi' | 'logistik' | 'persediaan' | 'expired' | 'analisis';
 
 function formatRupiah(num: number): string {
   return 'Rp ' + num.toLocaleString('id-ID');
@@ -70,6 +70,14 @@ export function Laporan() {
   const [nilaiMasukTotal, setNilaiMasukTotal] = useState(0);
   const [nilaiKeluarTotal, setNilaiKeluarTotal] = useState(0);
 
+  const [analisisData, setAnalisisData] = useState<{
+    nilai_inventaris: number;
+    paling_sering_keluar: any[];
+    tercepat_habis: any[];
+    expired_barang: any[];
+    dibuang_barang: any[];
+  } | null>(null);
+
   // Search/filter lokal
   const [search, setSearch] = useState('');
 
@@ -78,6 +86,10 @@ export function Laporan() {
     else setRefreshing(true);
 
     try {
+      // Selalu muat data analisis real-time
+      const anaRes = await laporanApi.analisis(dari, sampai);
+      setAnalisisData(anaRes.data);
+
       if (activeTab === 'transaksi') {
         const res = await laporanApi.penjualan(dari, sampai);
         setTransaksiList(res.data.items || []);
@@ -110,6 +122,9 @@ export function Laporan() {
 
   const filteredItems = useMemo(() => {
     const q = search.toLowerCase().trim();
+    if (activeTab === 'analisis') {
+      return [];
+    }
     if (activeTab === 'transaksi') {
       if (!q) return transaksiList;
       return transaksiList.filter(t => 
@@ -138,6 +153,9 @@ export function Laporan() {
 
   // Chart data builder
   const chartData = useMemo(() => {
+    if (activeTab === 'analisis') {
+      return [];
+    }
     if (activeTab === 'transaksi') {
       // Kelompokkan total penjualan per tanggal
       const map: Record<string, number> = {};
@@ -183,10 +201,14 @@ export function Laporan() {
       url = laporanApi.logistik(dari, sampai, format) as string;
     } else if (activeTab === 'persediaan') {
       url = laporanApi.stok(format) as string;
-    } else {
+    } else if (activeTab === 'expired') {
       url = laporanApi.kadaluarsa(format) as string;
+    } else if (activeTab === 'analisis') {
+      url = laporanApi.analisis(dari, sampai, format) as string;
     }
-    window.open(url, '_blank');
+    if (url) {
+      window.open(url, '_blank');
+    }
   };
 
   const currentTabLabel = activeTab === 'transaksi' 
@@ -195,7 +217,9 @@ export function Laporan() {
       ? 'Logistik Masuk vs Keluar' 
       : activeTab === 'persediaan' 
         ? 'Stok Persediaan' 
-        : 'Kedaluwarsa Obat';
+        : activeTab === 'expired'
+          ? 'Kedaluwarsa Barang'
+          : 'Analisis Kinerja & Aset';
 
   return (
     <div className="space-y-5 font-sans">
@@ -236,12 +260,13 @@ export function Laporan() {
       </div>
 
       {/* Segmented tab control */}
-      <div className="bg-white border border-slate-100 shadow-sm rounded-xl p-1 flex gap-0.5 w-fit">
+      <div className="bg-white border border-slate-100 shadow-sm rounded-xl p-1 flex gap-0.5 w-fit flex-wrap">
         {[
           { key: 'transaksi', label: 'Laporan Penjualan', icon: Activity },
           { key: 'logistik', label: 'Laporan Logistik', icon: Activity },
           { key: 'persediaan', label: 'Laporan Stok', icon: Package },
           { key: 'expired', label: 'Laporan Expired', icon: AlertTriangle },
+          { key: 'analisis', label: 'Analisis Kinerja & Aset', icon: TrendingUp },
         ].map(({ key, label, icon: Icon }) => (
           <button
             key={key}
@@ -260,7 +285,7 @@ export function Laporan() {
       {/* Filter bar */}
       <div className="bg-white border border-slate-100 shadow-sm rounded-xl p-4 space-y-3">
         <div className="flex flex-wrap items-center gap-3">
-          {(activeTab === 'transaksi' || activeTab === 'logistik') && (
+          {(activeTab === 'transaksi' || activeTab === 'logistik' || activeTab === 'analisis') && (
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold text-slate-500">Rentang Tanggal:</span>
               <input
@@ -300,266 +325,404 @@ export function Laporan() {
       </div>
 
       {/* Analytics Overview */}
-      <div className="grid grid-cols-1 xl:grid-cols-5 gap-5">
-        {/* Left Column: Tren Chart */}
-        <div className="xl:col-span-3 bg-white border border-slate-100 shadow-sm rounded-xl overflow-hidden flex flex-col justify-between p-5 min-h-[340px]">
-          <div>
-            <p className="text-sm font-semibold text-slate-800">
-              Visualisasi Grafis Tren {currentTabLabel}
-            </p>
-            <p className="text-[10px] text-slate-400 mt-0.5">Berdasarkan data operasional terbaru dari database</p>
+      {activeTab !== 'analisis' && (
+        <div className="grid grid-cols-1 xl:grid-cols-5 gap-5">
+          {/* Left Column: Tren Chart */}
+          <div className="xl:col-span-3 bg-white border border-slate-100 shadow-sm rounded-xl overflow-hidden flex flex-col justify-between p-5 min-h-[340px]">
+            <div>
+              <p className="text-sm font-semibold text-slate-800">
+                Visualisasi Grafis Tren {currentTabLabel}
+              </p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Berdasarkan data operasional terbaru dari database</p>
+            </div>
+
+            {loading ? (
+              <div className="flex justify-center items-center py-10">
+                <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />
+              </div>
+            ) : chartData.length === 0 ? (
+              <div className="text-center py-10 text-xs text-slate-400">Tidak ada data untuk dirender dalam grafik</div>
+            ) : (
+              <div className="h-48 w-full mt-4">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorVal" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={PRIMARY} stopOpacity={0.2} />
+                        <stop offset="95%" stopColor={PRIMARY} stopOpacity={0.0} />
+                      </linearGradient>
+                      <linearGradient id="colorBlue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.2} />
+                        <stop offset="95%" stopColor="#3B82F6" stopOpacity={0.0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                    <XAxis dataKey="tgl" stroke="#94A3B8" fontSize={9} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#94A3B8" fontSize={9} tickLine={false} axisLine={false} tickFormatter={activeTab === 'transaksi' || activeTab === 'persediaan' ? fmtAxisRupiah : undefined} />
+                    <Tooltip content={<CustomTooltip rupiah={activeTab === 'transaksi' || activeTab === 'persediaan'} />} />
+                    {activeTab === 'logistik' ? (
+                      <>
+                        <Area type="monotone" dataKey="masuk" name="Barang Masuk (Unit)" stroke={PRIMARY} strokeWidth={2} fillOpacity={1} fill="url(#colorVal)" />
+                        <Area type="monotone" dataKey="keluar" name="Barang Keluar (Unit)" stroke="#3B82F6" strokeWidth={2} fillOpacity={1} fill="url(#colorBlue)" />
+                      </>
+                    ) : (
+                      <Area type="monotone" dataKey="nilai" name={activeTab === 'expired' ? 'Hari Expired' : 'Nilai (Rp)'} stroke={PRIMARY} strokeWidth={2} fillOpacity={1} fill="url(#colorVal)" />
+                    )}
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+
+          {/* Right Column: Summary Data Strip */}
+          <div className="xl:col-span-2 bg-white border border-slate-100 shadow-sm rounded-xl p-5 flex flex-col justify-between">
+            <div>
+              <p className="text-sm font-semibold text-slate-800">Ringkasan Nilai Operasional</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Hasil kalkulasi agregat data</p>
+            </div>
+
+            <div className="space-y-3 mt-4">
+              {activeTab === 'transaksi' && (
+                <>
+                  <div className="bg-slate-50 rounded-lg p-3">
+                    <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Total Pendapatan Penjualan</p>
+                    <p className="text-lg font-bold text-slate-800 mt-1 font-mono">{formatRupiah(totalPenjualan)}</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-lg p-3">
+                    <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Jumlah Transaksi Penjualan</p>
+                    <p className="text-lg font-bold text-slate-800 mt-1">{transaksiList.length} Transaksi</p>
+                  </div>
+                </>
+              )}
+
+              {activeTab === 'logistik' && (
+                <>
+                  <div className="bg-slate-50 rounded-lg p-3">
+                    <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Total Penerimaan (Barang Masuk)</p>
+                    <p className="text-sm font-bold text-slate-800 mt-1 font-mono">
+                      {totalMasukUnit} Unit ({formatRupiah(nilaiMasukTotal)})
+                    </p>
+                  </div>
+                  <div className="bg-slate-50 rounded-lg p-3">
+                    <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Total Pengeluaran (Barang Keluar)</p>
+                    <p className="text-sm font-bold text-blue-600 mt-1 font-mono">
+                      {totalKeluarUnit} Unit ({formatRupiah(nilaiKeluarTotal)})
+                    </p>
+                  </div>
+                </>
+              )}
+
+              {activeTab === 'persediaan' && (
+                <>
+                  <div className="bg-slate-50 rounded-lg p-3">
+                    <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Total Nilai Aset Stok</p>
+                    <p className="text-lg font-bold text-slate-800 mt-1 font-mono">
+                      {formatRupiah(stokList.reduce((s, it) => s + ((it['Stok'] || 0) * (it['Harga Beli'] || 0)), 0))}
+                    </p>
+                  </div>
+                  <div className="bg-slate-50 rounded-lg p-3">
+                    <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Total Jenis Barang Terdaftar</p>
+                    <p className="text-lg font-bold text-slate-800 mt-1">{stokList.length} Item</p>
+                  </div>
+                </>
+              )}
+
+              {activeTab === 'expired' && (
+                <>
+                  <div className="bg-slate-50 rounded-lg p-3">
+                    <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Barang Berstatus Expired</p>
+                    <p className="text-lg font-bold text-red-600 mt-1">{kadaluarsaList.filter(k => k.status_exp === 'expired').length} Item</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-lg p-3">
+                    <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Mendekati Kadaluarsa (Near 30/90)</p>
+                    <p className="text-lg font-bold text-amber-500 mt-1">
+                      {kadaluarsaList.filter(k => k.status_exp === 'near-30' || k.status_exp === 'near-90').length} Item
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Analisis Kinerja & Aset Content */}
+      {activeTab === 'analisis' && (
+        <div className="grid grid-cols-1 xl:grid-cols-5 gap-5">
+          {/* Top Summary Cards */}
+          <div className="xl:col-span-5 bg-white border border-slate-100 shadow-sm rounded-xl p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <TrendingUp className="w-5 h-5 text-emerald-600" />
+              <h3 className="text-sm font-semibold text-slate-800">Ikhtisar Aset & Kinerja Penjualan</h3>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-slate-50 rounded-xl p-4">
+                <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Total Nilai Inventaris Aktif</p>
+                <p className="text-lg font-bold text-slate-800 mt-1 font-mono">
+                  {analisisData ? formatRupiah(analisisData.nilai_inventaris) : 'Rp 0'}
+                </p>
+                <p className="text-[10px] text-slate-400 mt-1">Sisa Stok × Harga Beli obat aktif</p>
+              </div>
+              <div className="bg-slate-50 rounded-xl p-4">
+                <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Total Item Expired Terdeteksi</p>
+                <p className="text-lg font-bold text-red-600 mt-1">
+                  {analisisData ? analisisData.expired_barang.length : 0} Item
+                </p>
+                <p className="text-[10px] text-slate-400 mt-1">Sisa obat yang melewati tanggal kedaluwarsa</p>
+              </div>
+              <div className="bg-slate-50 rounded-xl p-4">
+                <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Total Item Retur / Dibuang</p>
+                <p className="text-lg font-bold text-amber-600 mt-1">
+                  {analisisData ? analisisData.dibuang_barang.length : 0} Item
+                </p>
+                <p className="text-[10px] text-slate-400 mt-1">Obat keluar dengan status retur atau penyesuaian</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Paling Sering Keluar */}
+          <div className="xl:col-span-3 bg-white border border-slate-100 shadow-sm rounded-xl p-5">
+            <h3 className="text-xs font-semibold text-slate-800 mb-3 uppercase tracking-wider text-slate-500">
+              5 Barang Paling Sering Keluar (Penjualan Terlaris)
+            </h3>
+            {analisisData?.paling_sering_keluar && analisisData.paling_sering_keluar.length > 0 ? (
+              <div className="divide-y divide-slate-100">
+                {analisisData.paling_sering_keluar.map((item, idx) => (
+                  <div key={idx} className="py-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-semibold text-slate-700">{item.nama}</p>
+                      <p className="text-[10px] font-mono text-slate-400">{item.kode} • Satuan: {item.satuan}</p>
+                    </div>
+                    <span className="text-xs font-mono font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-md">
+                      {item.total_keluar} {item.satuan}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400 text-center py-10">Tidak ada data transaksi penjualan</p>
+            )}
+          </div>
+
+          {/* Tercepat Habis */}
+          <div className="xl:col-span-2 bg-white border border-slate-100 shadow-sm rounded-xl p-5">
+            <h3 className="text-xs font-semibold text-slate-800 mb-3 uppercase tracking-wider text-slate-500">
+              5 Barang Tercepat Habis (Stok Kritis)
+            </h3>
+            {analisisData?.tercepat_habis && analisisData.tercepat_habis.length > 0 ? (
+              <div className="divide-y divide-slate-100">
+                {analisisData.tercepat_habis.map((item, idx) => (
+                  <div key={idx} className="py-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-semibold text-slate-700">{item.nama}</p>
+                      <p className="text-[10px] text-slate-400">
+                        Sisa Stok: <span className="font-mono font-bold text-red-500">{item.stok}</span> / Min: {item.stok_minimum}
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded">
+                      KRITIS
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400 text-center py-10">Tidak ada barang berstatus kritis</p>
+            )}
+          </div>
+
+          {/* Riwayat Barang Expired & Dibuang */}
+          <div className="xl:col-span-5 bg-white border border-slate-100 shadow-sm rounded-xl p-5">
+            <h3 className="text-xs font-semibold text-slate-800 mb-4 uppercase tracking-wider text-slate-500">
+              Riwayat Barang Expired &amp; Penyesuaian/Retur Keluar
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div>
+                <h4 className="text-[10px] font-bold text-red-500 mb-2.5 uppercase tracking-wide">Kadaluarsa (Expired)</h4>
+                {analisisData?.expired_barang && analisisData.expired_barang.length > 0 ? (
+                  <div className="space-y-2 max-h-72 overflow-y-auto">
+                    {analisisData.expired_barang.map((item, idx) => (
+                      <div key={idx} className="p-2.5 bg-red-50/40 rounded-xl border border-red-100 flex justify-between items-center text-xs">
+                        <div>
+                          <p className="font-semibold text-slate-700">{item.nama}</p>
+                          <p className="text-[10px] text-red-600 font-medium">Expired: {new Date(item.expired_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                        </div>
+                        <span className="font-bold text-slate-700 bg-white border border-slate-200 px-2 py-0.5 rounded-md font-mono">{item.stok} {item.satuan}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-400 italic">Tidak ada riwayat barang expired</p>
+                )}
+              </div>
+              <div>
+                <h4 className="text-[10px] font-bold text-amber-500 mb-2.5 uppercase tracking-wide">Dibuang / Diretur Keluar</h4>
+                {analisisData?.dibuang_barang && analisisData.dibuang_barang.length > 0 ? (
+                  <div className="space-y-2 max-h-72 overflow-y-auto">
+                    {analisisData.dibuang_barang.map((item, idx) => (
+                      <div key={idx} className="p-2.5 bg-amber-50/40 rounded-xl border border-amber-100 flex justify-between items-center text-xs">
+                        <div>
+                          <p className="font-semibold text-slate-700">{item.nama}</p>
+                          <p className="text-[10px] text-slate-400">Tgl: {new Date(item.tanggal).toLocaleDateString('id-ID')}</p>
+                        </div>
+                        <div className="text-right">
+                          <span className="font-bold block text-slate-700 font-mono">{item.jumlah} {item.satuan}</span>
+                          <span className="text-[9px] uppercase font-bold text-amber-600 bg-amber-50 border border-amber-100 px-1.5 py-0.5 rounded">{item.keterangan || 'Retur/Buang'}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-400 italic">Tidak ada riwayat obat dibuang/diretur</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Data Table */}
+      {activeTab !== 'analisis' && (
+        <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-slate-50 flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-700">Rincian Data Laporan</span>
+            <span className="text-xs text-slate-400">{filteredItems.length} baris data</span>
           </div>
 
           {loading ? (
-            <div className="flex justify-center items-center py-10">
-              <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />
+            <div className="flex justify-center items-center py-20">
+              <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
             </div>
-          ) : chartData.length === 0 ? (
-            <div className="text-center py-10 text-xs text-slate-400">Tidak ada data untuk dirender dalam grafik</div>
           ) : (
-            <div className="h-48 w-full mt-4">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorVal" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={PRIMARY} stopOpacity={0.2} />
-                      <stop offset="95%" stopColor={PRIMARY} stopOpacity={0.0} />
-                    </linearGradient>
-                    <linearGradient id="colorBlue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#3B82F6" stopOpacity={0.0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
-                  <XAxis dataKey="tgl" stroke="#94A3B8" fontSize={9} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#94A3B8" fontSize={9} tickLine={false} axisLine={false} tickFormatter={activeTab === 'transaksi' || activeTab === 'persediaan' ? fmtAxisRupiah : undefined} />
-                  <Tooltip content={<CustomTooltip rupiah={activeTab === 'transaksi' || activeTab === 'persediaan'} />} />
-                  {activeTab === 'logistik' ? (
-                    <>
-                      <Area type="monotone" dataKey="masuk" name="Obat Masuk (Unit)" stroke={PRIMARY} strokeWidth={2} fillOpacity={1} fill="url(#colorVal)" />
-                      <Area type="monotone" dataKey="keluar" name="Obat Keluar (Unit)" stroke="#3B82F6" strokeWidth={2} fillOpacity={1} fill="url(#colorBlue)" />
-                    </>
-                  ) : (
-                    <Area type="monotone" dataKey="nilai" name={activeTab === 'expired' ? 'Hari Expired' : 'Nilai (Rp)'} stroke={PRIMARY} strokeWidth={2} fillOpacity={1} fill="url(#colorVal)" />
-                  )}
-                </AreaChart>
-              </ResponsiveContainer>
+            <div className="overflow-x-auto">
+              {activeTab === 'transaksi' && (
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 font-semibold">
+                    <tr>
+                      <th className="px-4 py-3">No. Transaksi</th>
+                      <th className="px-4 py-3">Tanggal</th>
+                      <th className="px-4 py-3">Nama Pasien</th>
+                      <th className="px-4 py-3">Dokter</th>
+                      <th className="px-4 py-3">Metode Bayar</th>
+                      <th className="px-4 py-3 text-right">Total Transaksi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50 text-slate-600">
+                    {filteredItems.map((t, i) => (
+                      <tr key={i} className="hover:bg-slate-50/50">
+                        <td className="px-4 py-3 font-mono font-medium text-slate-800">{t.no_transaksi}</td>
+                        <td className="px-4 py-3">{new Date(t.tanggal).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                        <td className="px-4 py-3 font-medium text-slate-800">{t.pasien}</td>
+                        <td className="px-4 py-3">{t.dokter || '-'}</td>
+                        <td className="px-4 py-3 uppercase text-[10px]">{t.metode_bayar}</td>
+                        <td className="px-4 py-3 text-right font-mono font-bold text-slate-800">{formatRupiah(t.total)}</td>
+                      </tr>
+                    ))}
+                    {filteredItems.length === 0 && (
+                      <tr><td colSpan={6} className="text-center py-10 text-slate-400">Tidak ada riwayat transaksi penjualan</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              )}
+
+              {activeTab === 'logistik' && (
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 font-semibold">
+                    <tr>
+                      <th className="px-4 py-3">Tanggal</th>
+                      <th className="px-4 py-3 text-right">Total Item Masuk</th>
+                      <th className="px-4 py-3 text-right">Nilai Masuk (Rp)</th>
+                      <th className="px-4 py-3 text-right">Total Item Keluar</th>
+                      <th className="px-4 py-3 text-right">Nilai Keluar (Rp)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50 text-slate-600">
+                    {filteredItems.map((l, i) => (
+                      <tr key={i} className="hover:bg-slate-50/50">
+                        <td className="px-4 py-3 font-medium text-slate-800">
+                          {new Date(l.tanggal).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono font-semibold">{l.total_masuk} unit</td>
+                        <td className="px-4 py-3 text-right font-mono font-semibold text-emerald-600">{formatRupiah(l.nilai_masuk)}</td>
+                        <td className="px-4 py-3 text-right font-mono font-semibold">{l.total_keluar} unit</td>
+                        <td className="px-4 py-3 text-right font-mono font-semibold text-blue-600">{formatRupiah(l.nilai_keluar)}</td>
+                      </tr>
+                    ))}
+                    {filteredItems.length === 0 && (
+                      <tr><td colSpan={5} className="text-center py-10 text-slate-400">Tidak ada riwayat logistik masuk vs keluar</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              )}
+
+              {activeTab === 'persediaan' && (
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 font-semibold">
+                    <tr>
+                      <th className="px-4 py-3">Kode Barang</th>
+                      <th className="px-4 py-3">Nama Barang</th>
+                      <th className="px-4 py-3">Kategori</th>
+                      <th className="px-4 py-3 text-right">Stok</th>
+                      <th className="px-4 py-3 text-right">Harga Beli</th>
+                      <th className="px-4 py-3 text-right">Harga Jual</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50 text-slate-600">
+                    {filteredItems.map((s, i) => (
+                      <tr key={i} className="hover:bg-slate-50/50">
+                        <td className="px-4 py-3 font-mono font-medium text-slate-800">{s['Kode Obat']}</td>
+                        <td className="px-4 py-3 font-medium text-slate-800">{s['Nama Obat']}</td>
+                        <td className="px-4 py-3">{s['Kategori'] || '-'}</td>
+                        <td className="px-4 py-3 text-right font-mono font-semibold">{s['Stok']} {s['Satuan']}</td>
+                        <td className="px-4 py-3 text-right font-mono">{formatRupiah(s['Harga Beli'] || 0)}</td>
+                        <td className="px-4 py-3 text-right font-mono font-bold text-slate-800">{formatRupiah(s['Harga Jual'] || 0)}</td>
+                      </tr>
+                    ))}
+                    {filteredItems.length === 0 && (
+                      <tr><td colSpan={6} className="text-center py-10 text-slate-400">Tidak ada data persediaan</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              )}
+
+              {activeTab === 'expired' && (
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 font-semibold">
+                    <tr>
+                      <th className="px-4 py-3">Kode</th>
+                      <th className="px-4 py-3">Nama Barang</th>
+                      <th className="px-4 py-3">Sisa Stok</th>
+                      <th className="px-4 py-3 text-right">Hari Expired</th>
+                      <th className="px-4 py-3 text-right">Tanggal Expired</th>
+                      <th className="px-4 py-3 text-center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50 text-slate-600">
+                    {filteredItems.map((k, i) => (
+                      <tr key={i} className="hover:bg-slate-50/50">
+                        <td className="px-4 py-3 font-mono font-medium text-slate-800">{k.kode}</td>
+                        <td className="px-4 py-3 font-medium text-slate-800">{k.nama}</td>
+                        <td className="px-4 py-3 font-semibold">{k.stok}</td>
+                        <td className="px-4 py-3 text-right font-mono">{k.hari_expired !== null ? `${k.hari_expired} Hari` : '-'}</td>
+                        <td className="px-4 py-3 text-right font-mono">{k.expired_date ? new Date(k.expired_date).toLocaleDateString('id-ID') : '-'}</td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                            k.status_exp === 'expired' ? 'bg-red-100 text-red-700' : k.status_exp === 'near-30' ? 'bg-orange-100 text-orange-700' : 'bg-yellow-100 text-yellow-700'
+                          }`}>
+                            {k.status_exp?.toUpperCase() || 'AMAN'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                    {filteredItems.length === 0 && (
+                      <tr><td colSpan={6} className="text-center py-10 text-slate-400">Tidak ada laporan barang kadaluarsa</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              )}
             </div>
           )}
         </div>
-
-        {/* Right Column: Summary Data Strip */}
-        <div className="xl:col-span-2 bg-white border border-slate-100 shadow-sm rounded-xl p-5 flex flex-col justify-between">
-          <div>
-            <p className="text-sm font-semibold text-slate-800">Ringkasan Nilai Operasional</p>
-            <p className="text-[10px] text-slate-400 mt-0.5">Hasil kalkulasi agregat data</p>
-          </div>
-
-          <div className="space-y-3 mt-4">
-            {activeTab === 'transaksi' && (
-              <>
-                <div className="bg-slate-50 rounded-lg p-3">
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Total Pendapatan Penjualan</p>
-                  <p className="text-lg font-bold text-slate-800 mt-1 font-mono">{formatRupiah(totalPenjualan)}</p>
-                </div>
-                <div className="bg-slate-50 rounded-lg p-3">
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Jumlah Transaksi Penjualan</p>
-                  <p className="text-lg font-bold text-slate-800 mt-1">{transaksiList.length} Transaksi</p>
-                </div>
-              </>
-            )}
-
-            {activeTab === 'logistik' && (
-              <>
-                <div className="bg-slate-50 rounded-lg p-3">
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Total Penerimaan (Obat Masuk)</p>
-                  <p className="text-sm font-bold text-slate-800 mt-1 font-mono">
-                    {totalMasukUnit} Unit ({formatRupiah(nilaiMasukTotal)})
-                  </p>
-                </div>
-                <div className="bg-slate-50 rounded-lg p-3">
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Total Pengeluaran (Obat Keluar)</p>
-                  <p className="text-sm font-bold text-blue-600 mt-1 font-mono">
-                    {totalKeluarUnit} Unit ({formatRupiah(nilaiKeluarTotal)})
-                  </p>
-                </div>
-              </>
-            )}
-
-            {activeTab === 'persediaan' && (
-              <>
-                <div className="bg-slate-50 rounded-lg p-3">
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Total Nilai Aset Stok</p>
-                  <p className="text-lg font-bold text-slate-800 mt-1 font-mono">
-                    {formatRupiah(stokList.reduce((s, it) => s + ((it['Stok'] || 0) * (it['Harga Beli'] || 0)), 0))}
-                  </p>
-                </div>
-                <div className="bg-slate-50 rounded-lg p-3">
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Total Jenis Obat Terdaftar</p>
-                  <p className="text-lg font-bold text-slate-800 mt-1">{stokList.length} Item</p>
-                </div>
-              </>
-            )}
-
-            {activeTab === 'expired' && (
-              <>
-                <div className="bg-slate-50 rounded-lg p-3">
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Obat Berstatus Expired</p>
-                  <p className="text-lg font-bold text-red-600 mt-1">{kadaluarsaList.filter(k => k.status_exp === 'expired').length} Item</p>
-                </div>
-                <div className="bg-slate-50 rounded-lg p-3">
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Mendekati Kadaluarsa (Near 30/90)</p>
-                  <p className="text-lg font-bold text-amber-500 mt-1">
-                    {kadaluarsaList.filter(k => k.status_exp === 'near-30' || k.status_exp === 'near-90').length} Item
-                  </p>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Data Table */}
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-slate-50 flex items-center justify-between">
-          <span className="text-xs font-semibold text-slate-700">Rincian Data Laporan</span>
-          <span className="text-xs text-slate-400">{filteredItems.length} baris data</span>
-        </div>
-
-        {loading ? (
-          <div className="flex justify-center items-center py-20">
-            <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            {activeTab === 'transaksi' && (
-              <table className="w-full text-xs text-left">
-                <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 font-semibold">
-                  <tr>
-                    <th className="px-4 py-3">No. Transaksi</th>
-                    <th className="px-4 py-3">Tanggal</th>
-                    <th className="px-4 py-3">Nama Pasien</th>
-                    <th className="px-4 py-3">Dokter</th>
-                    <th className="px-4 py-3">Metode Bayar</th>
-                    <th className="px-4 py-3 text-right">Total Transaksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50 text-slate-600">
-                  {filteredItems.map((t, i) => (
-                    <tr key={i} className="hover:bg-slate-50/50">
-                      <td className="px-4 py-3 font-mono font-medium text-slate-800">{t.no_transaksi}</td>
-                      <td className="px-4 py-3">{new Date(t.tanggal).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
-                      <td className="px-4 py-3 font-medium text-slate-800">{t.pasien}</td>
-                      <td className="px-4 py-3">{t.dokter || '-'}</td>
-                      <td className="px-4 py-3 uppercase text-[10px]">{t.metode_bayar}</td>
-                      <td className="px-4 py-3 text-right font-mono font-bold text-slate-800">{formatRupiah(t.total)}</td>
-                    </tr>
-                  ))}
-                  {filteredItems.length === 0 && (
-                    <tr><td colSpan={6} className="text-center py-10 text-slate-400">Tidak ada riwayat transaksi penjualan</td></tr>
-                  )}
-                </tbody>
-              </table>
-            )}
-
-            {activeTab === 'logistik' && (
-              <table className="w-full text-xs text-left">
-                <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 font-semibold">
-                  <tr>
-                    <th className="px-4 py-3">Tanggal</th>
-                    <th className="px-4 py-3 text-right">Total Item Masuk</th>
-                    <th className="px-4 py-3 text-right">Nilai Masuk (Rp)</th>
-                    <th className="px-4 py-3 text-right">Total Item Keluar</th>
-                    <th className="px-4 py-3 text-right">Nilai Keluar (Rp)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50 text-slate-600">
-                  {filteredItems.map((l, i) => (
-                    <tr key={i} className="hover:bg-slate-50/50">
-                      <td className="px-4 py-3 font-medium text-slate-800">
-                        {new Date(l.tanggal).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono font-semibold">{l.total_masuk} unit</td>
-                      <td className="px-4 py-3 text-right font-mono font-semibold text-emerald-600">{formatRupiah(l.nilai_masuk)}</td>
-                      <td className="px-4 py-3 text-right font-mono font-semibold">{l.total_keluar} unit</td>
-                      <td className="px-4 py-3 text-right font-mono font-semibold text-blue-600">{formatRupiah(l.nilai_keluar)}</td>
-                    </tr>
-                  ))}
-                  {filteredItems.length === 0 && (
-                    <tr><td colSpan={5} className="text-center py-10 text-slate-400">Tidak ada riwayat logistik masuk vs keluar</td></tr>
-                  )}
-                </tbody>
-              </table>
-            )}
-
-            {activeTab === 'persediaan' && (
-              <table className="w-full text-xs text-left">
-                <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 font-semibold">
-                  <tr>
-                    <th className="px-4 py-3">Kode Obat</th>
-                    <th className="px-4 py-3">Nama Obat</th>
-                    <th className="px-4 py-3">Kategori</th>
-                    <th className="px-4 py-3 text-right">Stok</th>
-                    <th className="px-4 py-3 text-right">Harga Beli</th>
-                    <th className="px-4 py-3 text-right">Harga Jual</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50 text-slate-600">
-                  {filteredItems.map((s, i) => (
-                    <tr key={i} className="hover:bg-slate-50/50">
-                      <td className="px-4 py-3 font-mono font-medium text-slate-800">{s['Kode Obat']}</td>
-                      <td className="px-4 py-3 font-medium text-slate-800">{s['Nama Obat']}</td>
-                      <td className="px-4 py-3">{s['Kategori'] || '-'}</td>
-                      <td className="px-4 py-3 text-right font-mono font-semibold">{s['Stok']} {s['Satuan']}</td>
-                      <td className="px-4 py-3 text-right font-mono">{formatRupiah(s['Harga Beli'] || 0)}</td>
-                      <td className="px-4 py-3 text-right font-mono font-bold text-slate-800">{formatRupiah(s['Harga Jual'] || 0)}</td>
-                    </tr>
-                  ))}
-                  {filteredItems.length === 0 && (
-                    <tr><td colSpan={6} className="text-center py-10 text-slate-400">Tidak ada data persediaan</td></tr>
-                  )}
-                </tbody>
-              </table>
-            )}
-
-            {activeTab === 'expired' && (
-              <table className="w-full text-xs text-left">
-                <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 font-semibold">
-                  <tr>
-                    <th className="px-4 py-3">Kode</th>
-                    <th className="px-4 py-3">Nama Obat</th>
-                    <th className="px-4 py-3">Sisa Stok</th>
-                    <th className="px-4 py-3 text-right">Hari Expired</th>
-                    <th className="px-4 py-3 text-right">Tanggal Expired</th>
-                    <th className="px-4 py-3 text-center">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50 text-slate-600">
-                  {filteredItems.map((k, i) => (
-                    <tr key={i} className="hover:bg-slate-50/50">
-                      <td className="px-4 py-3 font-mono font-medium text-slate-800">{k.kode}</td>
-                      <td className="px-4 py-3 font-medium text-slate-800">{k.nama}</td>
-                      <td className="px-4 py-3 font-semibold">{k.stok}</td>
-                      <td className="px-4 py-3 text-right font-mono">{k.hari_expired !== null ? `${k.hari_expired} Hari` : '-'}</td>
-                      <td className="px-4 py-3 text-right font-mono">{k.expired_date ? new Date(k.expired_date).toLocaleDateString('id-ID') : '-'}</td>
-                      <td className="px-4 py-3 text-center">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                          k.status_exp === 'expired' ? 'bg-red-100 text-red-700' : k.status_exp === 'near-30' ? 'bg-orange-100 text-orange-700' : 'bg-yellow-100 text-yellow-700'
-                        }`}>
-                          {k.status_exp?.toUpperCase() || 'AMAN'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                  {filteredItems.length === 0 && (
-                    <tr><td colSpan={6} className="text-center py-10 text-slate-400">Tidak ada laporan obat kadaluarsa</td></tr>
-                  )}
-                </tbody>
-              </table>
-            )}
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }

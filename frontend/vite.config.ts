@@ -33,4 +33,25 @@ export default defineConfig({
 
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
   assetsInclude: ['**/*.svg', '**/*.csv'],
+
+  server: {
+    // Expose ke semua network interface agar bisa diakses via ngrok
+    host: true,
+    port: 5173,
+    // Izinkan semua host (termasuk *.ngrok-free.app, *.ngrok.io, dll.) — Vite v6 pakai true bukan 'all'
+    allowedHosts: true,
+    // Proxy /api ke backend Laravel lokal - tidak perlu tunnel kedua
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/sanctum': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
+  },
 })

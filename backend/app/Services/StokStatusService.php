@@ -100,7 +100,7 @@ class StokStatusService
                 $stokHabis++;
             }
 
-            if ($item->expired_date !== null) {
+            if ($item->expired_date !== null && $item->stok > 0) {
                 $exp = self::expStatus($item->expired_date);
                 match ($exp['status_exp']) {
                     'expired' => $expired++,

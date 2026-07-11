@@ -49,6 +49,21 @@ class ObatSeeder extends Seeder
             // ── Obat Saluran Pernapasan ──────────────────────────────────
             ['kode' => 'OBT-0017', 'nama' => 'Salbutamol Inhaler', 'nama_generik' => 'Salbutamol', 'kategori_id' => $k('KTG-08'), 'satuan' => 'Tabung', 'stok' => 25, 'stok_minimum' => 10, 'harga_beli' => 25000, 'harga_jual' => 45000, 'golongan' => 'keras', 'lokasi_rak' => 'H1-01', 'expired_date' => $today->copy()->addMonths(16)],
             ['kode' => 'OBT-0018', 'nama' => 'Ambroxol Syrup 60ml', 'nama_generik' => 'Ambroxol', 'kategori_id' => $k('KTG-08'), 'satuan' => 'Botol', 'stok' => 40, 'stok_minimum' => 15, 'harga_beli' => 8000, 'harga_jual' => 15000, 'golongan' => 'bebas-terbatas', 'lokasi_rak' => 'H1-02', 'expired_date' => $today->copy()->addDays(28)],
+
+            // ── Bahan Medis Habis Pakai (BMHP) ───────────────────────────
+            ['kode' => 'OBT-0019', 'nama' => 'Plester Cepat Hansaplast', 'nama_generik' => 'Plester Luka', 'kategori_id' => $k('KTG-09'), 'satuan' => 'Lembar', 'stok' => 400, 'stok_minimum' => 100, 'harga_beli' => 800, 'harga_jual' => 1500, 'golongan' => 'bebas', 'lokasi_rak' => 'BMHP-01', 'expired_date' => $today->copy()->addMonths(36)],
+            ['kode' => 'OBT-0020', 'nama' => 'Kassa Steril 10x10cm', 'nama_generik' => 'Kasa Steril', 'kategori_id' => $k('KTG-09'), 'satuan' => 'Pcs', 'stok' => 150, 'stok_minimum' => 50, 'harga_beli' => 2500, 'harga_jual' => 4500, 'golongan' => 'bebas', 'lokasi_rak' => 'BMHP-02', 'expired_date' => $today->copy()->addMonths(24)],
+            ['kode' => 'OBT-0021', 'nama' => 'Perban Gulung 5cm', 'nama_generik' => 'Perban', 'kategori_id' => $k('KTG-09'), 'satuan' => 'Rol', 'stok' => 80, 'stok_minimum' => 20, 'harga_beli' => 3000, 'harga_jual' => 5500, 'golongan' => 'bebas', 'lokasi_rak' => 'BMHP-03', 'expired_date' => $today->copy()->addMonths(30)],
+
+            // ── Antiseptik & Disinfektan ─────────────────────────────────
+            ['kode' => 'OBT-0022', 'nama' => 'Betadine Solution 30ml', 'nama_generik' => 'Povidone Iodine', 'kategori_id' => $k('KTG-10'), 'satuan' => 'Botol', 'stok' => 90, 'stok_minimum' => 20, 'harga_beli' => 14000, 'harga_jual' => 19500, 'golongan' => 'bebas-terbatas', 'lokasi_rak' => 'BMHP-04', 'expired_date' => $today->copy()->addMonths(24)],
+            ['kode' => 'OBT-0023', 'nama' => 'Alkohol Swab Onemed', 'nama_generik' => 'Isopropyl Alcohol 70%', 'kategori_id' => $k('KTG-10'), 'satuan' => 'Pcs', 'stok' => 1200, 'stok_minimum' => 300, 'harga_beli' => 400, 'harga_jual' => 800, 'golongan' => 'bebas-terbatas', 'lokasi_rak' => 'BMHP-05', 'expired_date' => $today->copy()->addMonths(24)],
+            ['kode' => 'OBT-0024', 'nama' => 'Rivanol 100ml', 'nama_generik' => 'Ethacridine Lactate', 'kategori_id' => $k('KTG-10'), 'satuan' => 'Botol', 'stok' => 35, 'stok_minimum' => 15, 'harga_beli' => 5000, 'harga_jual' => 7500, 'golongan' => 'bebas-terbatas', 'lokasi_rak' => 'BMHP-06', 'expired_date' => $today->copy()->addMonths(12)],
+
+            // ── Alat Kesehatan Habis Pakai ───────────────────────────────
+            ['kode' => 'OBT-0025', 'nama' => 'Spuit 3cc Onemed', 'nama_generik' => 'Syringe 3ml', 'kategori_id' => $k('KTG-11'), 'satuan' => 'Pcs', 'stok' => 250, 'stok_minimum' => 50, 'harga_beli' => 1500, 'harga_jual' => 3000, 'golongan' => 'keras', 'lokasi_rak' => 'BMHP-07', 'expired_date' => $today->copy()->addMonths(48)],
+            ['kode' => 'OBT-0026', 'nama' => 'Masker Medis 3-Ply', 'nama_generik' => 'Masker', 'kategori_id' => $k('KTG-11'), 'satuan' => 'Kotak', 'stok' => 45, 'stok_minimum' => 10, 'harga_beli' => 18000, 'harga_jual' => 25000, 'golongan' => 'bebas', 'lokasi_rak' => 'BMHP-08', 'expired_date' => null],
+            ['kode' => 'OBT-0027', 'nama' => 'Sarung Tangan Nitril S', 'nama_generik' => 'Gloves Nitrile', 'kategori_id' => $k('KTG-11'), 'satuan' => 'Kotak', 'stok' => 30, 'stok_minimum' => 8, 'harga_beli' => 45000, 'harga_jual' => 58000, 'golongan' => 'bebas', 'lokasi_rak' => 'BMHP-09', 'expired_date' => null],
         ];
 
         foreach ($data as $obat) {

@@ -2,13 +2,13 @@ import { useState, useEffect } from 'react';
 import {
   Package, Archive, Truck, Activity, ArrowDownCircle, ArrowUpCircle,
   AlertTriangle, PackagePlus, PackageMinus, UserPlus, Plus,
-  AlertCircle, Clock, ChevronRight, Loader2, RefreshCw
+  AlertCircle, Clock, ChevronRight, Loader2, RefreshCw, X
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, PieChart, Pie, Cell,
 } from 'recharts';
-import { dashboardApi, monitoringApi, type DashboardSummary } from '../services/api';
+import { dashboardApi, monitoringApi, pengaturanApi, type DashboardSummary } from '../services/api';
 import type { Page } from './data';
 
 /* ── Design tokens ──────────────────────────────────────────────────────────── */
@@ -130,6 +130,30 @@ export function Dashboard({ setActivePage }: { setActivePage: (page: Page) => vo
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [expiredDays, setExpiredDays] = useState<number>(30);
+  const [hasLoadedSettings, setHasLoadedSettings] = useState<boolean>(false);
+  const [dismissedNotifIds, setDismissedNotifIds] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem('dismissed_notifications');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const dismissNotification = (id: string) => {
+    const updated = [...dismissedNotifIds, id];
+    setDismissedNotifIds(updated);
+    localStorage.setItem('dismissed_notifications', JSON.stringify(updated));
+  };
+
+  const clearAllNotifications = () => {
+    const allIds = notifications.map(n => n.id);
+    const updated = Array.from(new Set([...dismissedNotifIds, ...allIds]));
+    setDismissedNotifIds(updated);
+    localStorage.setItem('dismissed_notifications', JSON.stringify(updated));
+  };
+
+  const activeNotifications = notifications.filter(n => !dismissedNotifIds.includes(n.id));
 
   const fetchDashboardData = async (isSilent = false, days = expiredDays) => {
     if (!isSilent) setLoading(true);
@@ -201,15 +225,34 @@ export function Dashboard({ setActivePage }: { setActivePage: (page: Page) => vo
   };
 
   useEffect(() => {
-    fetchDashboardData(false, expiredDays);
-  }, [expiredDays]);
+    const initSettings = async () => {
+      try {
+        const res = await pengaturanApi.publik();
+        const settingsNear = Number(res.data.stok?.near_30);
+        if (settingsNear && !isNaN(settingsNear)) {
+          setExpiredDays(settingsNear);
+        }
+      } catch (err) {
+        console.error('Gagal memuat ambang kedaluwarsa default:', err);
+      } finally {
+        setHasLoadedSettings(true);
+      }
+    };
+    initSettings();
+  }, []);
+
+  useEffect(() => {
+    if (hasLoadedSettings) {
+      fetchDashboardData(false, expiredDays);
+    }
+  }, [expiredDays, hasLoadedSettings]);
 
   const totalStock = kategoriData.reduce((s, c) => s + c.value, 0);
 
   const stats = [
-    { label: 'Total Obat (Jenis)', value: summary?.total_jenis_obat ?? 0,    sub: 'terdaftar aktif',     icon: Package,       color: C.navy  },
+    { label: 'Total Barang (Jenis)', value: summary?.total_jenis_obat ?? 0,    sub: 'terdaftar aktif',     icon: Package,       color: C.navy  },
     { label: 'Total Kategori',     value: summary?.total_kategori ?? 0,      sub: 'kategori terdaftar',  icon: Archive,       color: C.sage  },
-    { label: 'Stok Kritis & Habis', value: summary?.stok_kritis ?? 0,        sub: 'perlu re-order',      icon: AlertTriangle, color: C.brick },
+    { label: 'Barang Kritis & Habis', value: summary?.stok_kritis ?? 0,        sub: 'perlu re-order',      icon: AlertTriangle, color: C.brick },
     { label: `Kedaluwarsa < ${expiredDays} Hari`, value: summary?.near_expired ?? 0, sub: `dalam ${expiredDays} hari ke depan`, icon: Clock, color: C.amber },
     { label: 'Transaksi Masuk (Bulan Ini)', value: summary?.transaksi_masuk_bulan_ini ?? 0, sub: 'bulan berjalan', icon: ArrowDownCircle, color: C.sage },
     { label: 'Transaksi Keluar (Bulan Ini)', value: summary?.transaksi_keluar_bulan_ini ?? 0, sub: 'bulan berjalan', icon: ArrowUpCircle, color: C.brick },
@@ -242,9 +285,12 @@ export function Dashboard({ setActivePage }: { setActivePage: (page: Page) => vo
                 cursor: 'pointer'
               }}
             >
-              <option value={30}>30 Hari</option>
-              <option value={60}>60 Hari</option>
-              <option value={90}>90 Hari</option>
+              {[30, 45, 60, 90, 120].map(val => (
+                <option key={val} value={val}>{val} Hari</option>
+              ))}
+              {![30, 45, 60, 90, 120].includes(expiredDays) && (
+                <option value={expiredDays}>{expiredDays} Hari</option>
+              )}
             </select>
           </div>
           <button
@@ -279,9 +325,9 @@ export function Dashboard({ setActivePage }: { setActivePage: (page: Page) => vo
           <AlertCircle size={15} style={{ color: C.brick, flexShrink: 0 }} />
           <span style={{ fontFamily: F.body, fontSize: 12.5, color: '#7F1D1D', flex: 1 }}>
             Perhatian:{' '}
-            {summary.expired > 0 && <strong>{summary.expired} obat expired </strong>}
+            {summary.expired > 0 && <strong>{summary.expired} barang expired </strong>}
             {summary.expired > 0 && summary.stok_kritis > 0 && 'dan '}
-            {summary.stok_kritis > 0 && <strong>{summary.stok_kritis} obat stok kritis </strong>}
+            {summary.stok_kritis > 0 && <strong>{summary.stok_kritis} barang stok kritis </strong>}
             memerlukan tindakan segera.
           </span>
           <button
@@ -308,8 +354,8 @@ export function Dashboard({ setActivePage }: { setActivePage: (page: Page) => vo
 
         {/* Bar chart */}
         <Card
-          title="Nilai Transaksi Harian"
-          subtitle="Obat Masuk vs Keluar Bulan Ini (Rupiah)"
+          title="Pendapatan Harian (Penjualan)"
+          subtitle="Total Nilai Penjualan Obat Bulan Ini (Rupiah)"
           action={
             <span style={{
               fontFamily: F.mono, fontSize: 10.5, color: C.slate,
@@ -351,8 +397,7 @@ export function Dashboard({ setActivePage }: { setActivePage: (page: Page) => vo
                   iconType="square" iconSize={9}
                   wrapperStyle={{ fontSize: 11, paddingTop: 10, fontFamily: F.body }}
                 />
-                <Bar dataKey="masuk"  name="Nilai Masuk"  fill={C.sage}  radius={[3, 3, 0, 0]} maxBarSize={16} />
-                <Bar dataKey="keluar" name="Nilai Keluar (Penjualan)" fill={C.amber} radius={[3, 3, 0, 0]} maxBarSize={16} />
+                <Bar dataKey="keluar" name="Pendapatan Penjualan" fill={C.sage} radius={[3, 3, 0, 0]} maxBarSize={20} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -367,7 +412,7 @@ export function Dashboard({ setActivePage }: { setActivePage: (page: Page) => vo
               </div>
             ) : kategoriData.length === 0 ? (
               <div style={{ height: 140, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: F.body, fontSize: 12, color: C.slate }}>
-                Belum ada data obat
+                Belum ada data barang
               </div>
             ) : (
               <>
@@ -416,23 +461,39 @@ export function Dashboard({ setActivePage }: { setActivePage: (page: Page) => vo
         <Card
           title="Peringatan &amp; Notifikasi Sistem"
           action={
-            <button
-              onClick={() => setActivePage('monitoring-expired')}
-              style={{
-                background: 'none', border: 'none', cursor: 'pointer',
-                fontFamily: F.body, fontSize: 12, fontWeight: 600, color: C.sage,
-                display: 'flex', alignItems: 'center', gap: 3,
-              }}
-            >
-              Lihat semua <ChevronRight size={12} />
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {activeNotifications.length > 0 && (
+                <button
+                  onClick={clearAllNotifications}
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    fontFamily: F.body, fontSize: 11, fontWeight: 600, color: C.brick,
+                    padding: '2px 6px', borderRadius: 3, transition: 'background-color 0.12s'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.backgroundColor = '#FDF2F0'}
+                  onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  Hapus Semua
+                </button>
+              )}
+              <button
+                onClick={() => setActivePage('monitoring-expired')}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  fontFamily: F.body, fontSize: 12, fontWeight: 600, color: C.sage,
+                  display: 'flex', alignItems: 'center', gap: 3,
+                }}
+              >
+                Lihat semua <ChevronRight size={12} />
+              </button>
+            </div>
           }
         >
           {loading ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
               <Loader2 size={24} style={{ animation: 'spin 1s linear infinite', color: C.sage }} />
             </div>
-          ) : notifications.length === 0 ? (
+          ) : activeNotifications.length === 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px 0', gap: 8 }}>
               <div style={{ width: 36, height: 36, borderRadius: '50%', backgroundColor: '#F0FDF4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Clock size={16} style={{ color: '#16A34A' }} />
@@ -443,11 +504,11 @@ export function Dashboard({ setActivePage }: { setActivePage: (page: Page) => vo
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {notifications.map((n) => {
+              {activeNotifications.map((n) => {
                 const borderLeftColor = n.severity === 'red' ? C.brick : n.severity === 'orange' ? C.amber : '#D97706';
                 return (
                   <div key={n.id} style={{
-                    display: 'flex', alignItems: 'flex-start', gap: 10,
+                    display: 'flex', alignItems: 'center', gap: 10,
                     padding: '9px 12px',
                     backgroundColor: C.paper,
                     border: `1px solid ${C.div}`,
@@ -459,12 +520,27 @@ export function Dashboard({ setActivePage }: { setActivePage: (page: Page) => vo
                         {n.message}
                       </p>
                     </div>
-                    <span style={{
-                      display: 'flex', alignItems: 'center', gap: 3,
-                      fontFamily: F.mono, fontSize: 10, color: C.slate, flexShrink: 0, marginTop: 1,
-                    }}>
-                      <Clock size={10} />{n.time}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                      <span style={{
+                        display: 'flex', alignItems: 'center', gap: 3,
+                        fontFamily: F.mono, fontSize: 10, color: C.slate,
+                      }}>
+                        <Clock size={10} />{n.time}
+                      </span>
+                      <button
+                        onClick={() => dismissNotification(n.id)}
+                        style={{
+                          background: 'none', border: 'none', padding: '2px', cursor: 'pointer',
+                          color: C.slate, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          borderRadius: 3, transition: 'background-color 0.12s'
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.backgroundColor = C.div}
+                        onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                        title="Hapus Notifikasi"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -479,10 +555,10 @@ export function Dashboard({ setActivePage }: { setActivePage: (page: Page) => vo
           <Card title="Aksi Cepat">
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               {[
-                { label: 'Tambah Obat',      icon: Plus,        page: 'master-obat' as Page, color: C.navy  },
-                { label: 'Tambah Supplier',  icon: UserPlus,    page: 'supplier'    as Page, color: C.slate },
-                { label: 'Penerimaan Obat',  icon: PackagePlus, page: 'obat-masuk'  as Page, color: C.sage  },
-                { label: 'Pengeluaran Obat', icon: PackageMinus,page: 'obat-keluar' as Page, color: C.amber },
+                { label: 'Tambah Barang',    icon: Plus,        page: 'master-barang' as Page, color: C.navy  },
+                { label: 'Tambah Supplier',  icon: UserPlus,    page: 'supplier'      as Page, color: C.slate },
+                { label: 'Stock Barang',     icon: PackagePlus, page: 'stock-barang'   as Page, color: C.sage  },
+                { label: 'Transaksi Keluar', icon: PackageMinus,page: 'transaksi'      as Page, color: C.amber },
               ].map(({ label, icon: Icon, page, color }) => (
                 <button
                   key={label}

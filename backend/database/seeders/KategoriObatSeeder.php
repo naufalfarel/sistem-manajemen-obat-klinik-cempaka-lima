@@ -18,6 +18,9 @@ class KategoriObatSeeder extends Seeder
             ['kode' => 'KTG-06', 'nama' => 'Antihipertensi', 'deskripsi' => 'Obat penurun tekanan darah tinggi.'],
             ['kode' => 'KTG-07', 'nama' => 'Antidiabetes', 'deskripsi' => 'Obat pengontrol gula darah.'],
             ['kode' => 'KTG-08', 'nama' => 'Obat Saluran Pernapasan', 'deskripsi' => 'Obat batuk, pilek, dan asma.'],
+            ['kode' => 'KTG-09', 'nama' => 'Bahan Medis Habis Pakai (BMHP)', 'deskripsi' => 'Bahan medis habis pakai seperti plester, perban, kassa, dll.'],
+            ['kode' => 'KTG-10', 'nama' => 'Cairan Antiseptik & Disinfektan', 'deskripsi' => 'Cairan untuk sterilisasi luka dan peralatan.'],
+            ['kode' => 'KTG-11', 'nama' => 'Alat Kesehatan Habis Pakai', 'deskripsi' => 'Alat kesehatan sekali pakai seperti spuit, masker, sarung tangan.'],
         ];
 
         foreach ($kategori as $data) {

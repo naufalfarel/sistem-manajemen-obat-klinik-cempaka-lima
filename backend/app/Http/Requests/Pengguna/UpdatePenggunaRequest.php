@@ -24,7 +24,7 @@ class UpdatePenggunaRequest extends FormRequest
             'email' => ['sometimes', 'required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($userId)],
             'nip' => ['nullable', 'string', 'max:50'],
             'foto' => ['nullable', 'image', 'max:2048'],
-            'role' => ['sometimes', 'required', Rule::in(User::ROLES)],
+            'role' => ['sometimes', 'required', Rule::exists('roles', 'slug')],
             'status' => ['sometimes', 'required', Rule::in(['aktif', 'nonaktif'])],
             // Perubahan password TIDAK lewat endpoint ini - gunakan
             // PATCH /pengguna/{id}/reset-password agar konsisten & ter-audit

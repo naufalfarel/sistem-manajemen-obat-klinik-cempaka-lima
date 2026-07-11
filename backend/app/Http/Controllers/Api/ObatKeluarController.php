@@ -56,7 +56,7 @@ class ObatKeluarController extends Controller
     /** GET /api/obat-keluar/{obat_keluar} */
     public function show(ObatKeluar $obatKeluar): JsonResponse
     {
-        $obatKeluar->load(['kasir', 'items.obat']);
+        $obatKeluar->load(['kasir', 'items.obat', 'riwayatCetak.user']);
 
         return response()->json(['data' => new ObatKeluarResource($obatKeluar)]);
     }
@@ -105,6 +105,7 @@ class ObatKeluarController extends Controller
                 'tanggal' => $data['tanggal'],
                 'pasien' => $data['pasien'],
                 'dokter' => $data['dokter'] ?? null,
+                'tipe_resep' => $data['tipe_resep'] ?? null,
                 'metode_bayar' => $data['metode_bayar'],
                 'total' => $total,
                 'status' => 'selesai',
@@ -173,6 +174,33 @@ class ObatKeluarController extends Controller
         return response()->json([
             'data' => new ObatKeluarResource($obatKeluar),
             'message' => $pesan,
+        ]);
+    }
+
+    /** POST /api/obat-keluar/{obatKeluar}/cetak */
+    public function logCetak(Request $request, ObatKeluar $obatKeluar): JsonResponse
+    {
+        $jenis = $request->string('jenis')->value();
+        if (!in_array($jenis, ['nota', 'resep', 'copy_resep'])) {
+            abort(422, 'Jenis cetak tidak valid.');
+        }
+
+        $log = $obatKeluar->riwayatCetak()->create([
+            'user_id' => auth()->id() ?? $obatKeluar->kasir_id,
+            'jenis' => $jenis,
+        ]);
+
+        $label = $jenis === 'nota' ? 'Nota Transaksi' : ($jenis === 'resep' ? 'Resep' : 'Copy Resep');
+        \App\Services\AuditLogger::record('cetak', 'obat-keluar', "Mencetak {$label} untuk transaksi: {$obatKeluar->no_transaksi} (pasien: {$obatKeluar->pasien})");
+
+        return response()->json([
+            'data' => [
+                'id' => $log->id,
+                'jenis' => $log->jenis,
+                'actor' => auth()->user()?->nama ?? 'Petugas',
+                'created_at' => $log->created_at?->toIso8601String(),
+            ],
+            'message' => 'Riwayat cetak berhasil dicatat.',
         ]);
     }
 }

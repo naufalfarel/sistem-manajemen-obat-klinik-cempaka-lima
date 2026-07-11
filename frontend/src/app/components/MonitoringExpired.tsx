@@ -12,9 +12,9 @@ interface MonitoringExpiredProps {
 }
 
 const tabs = [
-  { key: 'kritis', label: 'Stok Kritis & Habis', color: 'text-amber-600' },
+  { key: 'kritis', label: 'Kritis', color: 'text-amber-600' },
+  { key: 'near', label: 'Akan Expired', color: 'text-orange-600' },
   { key: 'expired', label: 'Sudah Expired', color: 'text-red-600' },
-  { key: 'near', label: 'Mendekati Expired', color: 'text-orange-600' },
 ] as const;
 
 function StatusBadge({ status }: { status: string }) {
@@ -27,7 +27,7 @@ function StatusBadge({ status }: { status: string }) {
   const labelMap: Record<string, string> = {
     expired: 'Expired',
     'near-30': '< 30 Hari',
-    'near-90': '30–90 Hari',
+    'near-90': 'Mendekati',
     aman: 'Aman',
   };
   return (
@@ -91,7 +91,7 @@ export function MonitoringExpired({ setActivePage }: MonitoringExpiredProps) {
         const res = await monitoringApi.expired({
           page: 1,
           per_page: 200,
-          status: activeTab === 'near' ? 'near-90' : 'expired'
+          status: activeTab === 'near' ? 'near' : 'expired'
         });
         setItems(res.data);
       }
@@ -135,7 +135,7 @@ export function MonitoringExpired({ setActivePage }: MonitoringExpiredProps) {
             <AlertTriangle className="text-amber-500 w-5 h-5" />
             Monitoring Stok Kritis &amp; Expired
           </h1>
-          <p className="text-xs text-slate-500 mt-1">Daftar obat yang membutuhkan perhatian segera berdasarkan kondisi stok dan tanggal kadaluarsa.</p>
+          <p className="text-xs text-slate-500 mt-1">Daftar barang yang membutuhkan perhatian segera berdasarkan kondisi stok dan tanggal kadaluarsa.</p>
         </div>
         <div className="flex gap-2">
           <button
@@ -191,7 +191,7 @@ export function MonitoringExpired({ setActivePage }: MonitoringExpiredProps) {
               value={search}
               onChange={e => setSearch(e.target.value)}
               type="text"
-              placeholder="Cari nama atau kode obat…"
+              placeholder="Cari nama atau kode barang…"
               className="bg-transparent text-sm outline-none text-gray-700 placeholder-gray-400 w-full"
             />
           </div>
@@ -242,11 +242,11 @@ export function MonitoringExpired({ setActivePage }: MonitoringExpiredProps) {
               <thead>
                 <tr className="bg-gray-50/70 border-b border-gray-100">
                   {activeTab === 'kritis' ? (
-                    ['Nama Obat', 'Golongan', 'Stok Saat Ini', 'Stok Minimum', 'Status Stok', 'Aksi'].map(h => (
+                    ['Nama Barang', 'Golongan/Jenis', 'Stok Saat Ini', 'Stok Minimum', 'Status Stok', 'Aksi'].map(h => (
                       <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 whitespace-nowrap">{h}</th>
                     ))
                   ) : (
-                    ['Nama Obat', 'Tgl. Expired', 'Sisa Hari', 'Stok Unit', 'Status Kedaluwarsa', 'Aksi'].map(h => (
+                    ['Nama Barang', 'Tgl. Expired', 'Sisa Hari', 'Stok Unit', 'Status Kedaluwarsa', 'Aksi'].map(h => (
                       <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 whitespace-nowrap">{h}</th>
                     ))
                   )}
@@ -363,21 +363,21 @@ export function MonitoringExpired({ setActivePage }: MonitoringExpiredProps) {
                     <button
                       onClick={() => {
                         setShowActionModal(null);
-                        setActivePage('master-obat');
+                        setActivePage('master-barang');
                       }}
                       className="w-full text-left px-4 py-3 rounded-lg border border-gray-200 hover:border-emerald-500 hover:bg-emerald-50 text-sm font-semibold text-gray-700 transition-colors flex items-center justify-between"
                     >
-                      <span>Update Stok Minimum (Master Obat)</span>
+                      <span>Update Stok Minimum (Master Barang)</span>
                       <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md font-medium">Navigasi</span>
                     </button>
                     <button
                       onClick={() => {
                         setShowActionModal(null);
-                        setActivePage('obat-masuk');
+                        setActivePage('stock-barang');
                       }}
                       className="w-full text-left px-4 py-3 rounded-lg border border-gray-200 hover:border-emerald-500 hover:bg-emerald-50 text-sm font-semibold text-gray-700 transition-colors flex items-center justify-between"
                     >
-                      <span>Restock Obat Baru (Obat Masuk)</span>
+                      <span>Restock Barang Baru (Stock Barang)</span>
                       <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md font-medium">Navigasi</span>
                     </button>
                   </>
@@ -386,21 +386,21 @@ export function MonitoringExpired({ setActivePage }: MonitoringExpiredProps) {
                     <button
                       onClick={() => {
                         setShowActionModal(null);
-                        setActivePage('obat-keluar');
+                        setActivePage('transaksi');
                       }}
                       className="w-full text-left px-4 py-3 rounded-lg border border-gray-200 hover:border-emerald-500 hover:bg-emerald-50 text-sm font-semibold text-gray-700 transition-colors flex items-center justify-between"
                     >
-                      <span>Retur / Buang Obat (Pengeluaran Obat)</span>
+                      <span>Retur / Buang Barang (Transaksi Keluar)</span>
                       <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md font-medium">Navigasi</span>
                     </button>
                     <button
                       onClick={() => {
                         setShowActionModal(null);
-                        setActivePage('master-obat');
+                        setActivePage('master-barang');
                       }}
                       className="w-full text-left px-4 py-3 rounded-lg border border-gray-200 hover:border-emerald-500 hover:bg-emerald-50 text-sm font-semibold text-gray-700 transition-colors flex items-center justify-between"
                     >
-                      <span>Detail Informasi Obat (Master Obat)</span>
+                      <span>Detail Informasi Barang (Master Barang)</span>
                       <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md font-medium">Navigasi</span>
                     </button>
                   </>

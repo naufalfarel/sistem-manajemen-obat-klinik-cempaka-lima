@@ -1,20 +1,22 @@
 import { useState, useEffect } from 'react';
 import { ShieldOff } from 'lucide-react';
 import { Layout } from './components/Layout';
+import { toast } from 'sonner';
 import { Login, type LoginUser } from './components/Login';
 import { Dashboard } from './components/Dashboard';
-import { MasterObat } from './components/MasterObat';
+import { MasterBarang } from './components/MasterBarang';
+import { HargaBarang } from './components/HargaBarang';
+import { KategoriBarang } from './components/KategoriBarang';
+import { StockBarang } from './components/StockBarang';
+import { Transaksi } from './components/Transaksi';
 import { MonitoringExpired } from './components/MonitoringExpired';
-import { ObatMasuk } from './components/ObatMasuk';
 import { ComingSoon } from './components/ComingSoon';
-import { KategoriObat } from './components/KategoriObat';
-import { ObatKeluar } from './components/ObatKeluar';
 import { Laporan } from './components/Laporan';
 import { Supplier } from './components/Supplier';
 import { ManajemenUser } from './components/ManajemenUser';
 import { PengaturanSistem } from './components/PengaturanSistem';
 import { AuditLog } from './components/AuditLog';
-import { ProfilPengguna } from './components/ProfilPengguna';
+import { ProfilPenggunaModal } from './components/ProfilPenggunaModal';
 import type { Page } from './components/data';
 import { authApi, token, pengaturanApi } from './services/api';
 
@@ -22,6 +24,7 @@ export default function App() {
   const [user, setUser]             = useState<LoginUser | null>(null);
   const [activePage, setActivePage] = useState<Page>('dashboard');
   const [authChecking, setAuthChecking] = useState(true); // Cek token localStorage dulu sebelum render
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [appConfig, setAppConfig] = useState<{ namaKlinik: string; logoUrl: string | null }>({
     namaKlinik: 'Klinik Cempaka Lima',
     logoUrl: null
@@ -56,6 +59,7 @@ export default function App() {
           nama:     u.nama,
           role:     u.role,
           fotoUrl:  u.foto_url ?? null,
+          email:    u.email,
           initials: u.nama
             .split(' ')
             .filter(Boolean)
@@ -75,7 +79,32 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (user) loadAppConfig();
+    if (user) {
+      loadAppConfig();
+      authApi.me().then(res => {
+        const u = res.data;
+        if (u.status === 'nonaktif') {
+          handleLogout();
+          toast.error('Akun Anda telah dinonaktifkan oleh administrator.');
+          return;
+        }
+        setUser(prev => prev ? {
+          ...prev,
+          nama: u.nama,
+          username: u.username,
+          role: u.role,
+          fotoUrl: u.foto_url ?? null,
+          initials: u.nama
+            .split(' ')
+            .filter(Boolean)
+            .slice(0, 2)
+            .map((w: string) => w[0].toUpperCase())
+            .join(''),
+        } : null);
+      }).catch(() => {
+        handleLogout();
+      });
+    }
   }, [activePage]);
 
   function handleLogin(u: LoginUser) {
@@ -95,7 +124,7 @@ export default function App() {
   if (authChecking) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F0F4F2' }}>
-        <div style={{ textAlign: 'center' }}>
+        <div style={{ textslate: 'center' }}>
           <div style={{ width: 48, height: 48, border: '4px solid #e2e8f0', borderTopColor: '#0F9D74', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 16px' }} />
           <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
           <p style={{ fontFamily: "'IBM Plex Sans', system-ui", fontSize: 13, color: '#7C8B93' }}>Memuat sesi...</p>
@@ -112,18 +141,18 @@ export default function App() {
   /* role dari backend adalah slug ('admin'), bukan label kapital ('Administrator') */
   const isAdmin = user.role === 'admin';
 
-  function AccessDenied() {
+  function AccessDenied({ message }: { message?: React.ReactNode }) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 360, gap: 12, padding: 40 }}>
         <div style={{ width: 56, height: 56, borderRadius: '50%', backgroundColor: '#FDF2F0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <ShieldOff size={26} style={{ color: '#B8483A' }} />
         </div>
-        <div style={{ textAlign: 'center' }}>
+        <div style={{ textslate: 'center' }}>
           <p style={{ fontFamily: "'Space Grotesk', system-ui", fontSize: 15, fontWeight: 700, color: '#1B2A45', margin: '0 0 6px' }}>
             Akses Ditolak
           </p>
           <p style={{ fontFamily: "'IBM Plex Sans', system-ui", fontSize: 13, color: '#7C8B93', margin: 0, lineHeight: 1.55, maxWidth: 340 }}>
-            Halaman ini hanya dapat diakses oleh <strong>Administrator</strong>. Hubungi admin sistem jika Anda memerlukan akses.
+            {message || <>Halaman ini hanya dapat diakses oleh <strong>Administrator</strong>. Hubungi admin sistem jika Anda memerlukan akses.</>}
           </p>
         </div>
         <button
@@ -142,19 +171,25 @@ export default function App() {
       return <AccessDenied />;
     }
 
+    if (activePage === 'harga-barang' && user.role !== 'admin' && user.role !== 'apoteker') {
+      return <AccessDenied message={<>Halaman ini hanya dapat diakses oleh <strong>Administrator</strong> atau <strong>Apoteker</strong>.</>} />;
+    }
+
     switch (activePage) {
       case 'dashboard':
         return <Dashboard setActivePage={setActivePage} />;
-      case 'master-obat':
-        return <MasterObat />;
-      case 'kategori':
-        return <KategoriObat />;
+      case 'master-barang':
+        return <MasterBarang setActivePage={setActivePage} />;
+      case 'harga-barang':
+        return <HargaBarang />;
+      case 'kategori-barang':
+        return <KategoriBarang />;
+      case 'stock-barang':
+        return <StockBarang />;
       case 'monitoring-expired':
         return <MonitoringExpired setActivePage={setActivePage} />;
-      case 'obat-masuk':
-        return <ObatMasuk />;
-      case 'obat-keluar':
-        return <ObatKeluar />;
+      case 'transaksi':
+        return <Transaksi />;
       case 'laporan':
         return <Laporan />;
       case 'supplier':
@@ -166,21 +201,55 @@ export default function App() {
       case 'audit-log':
         return <AuditLog />;
       case 'profil':
-        return <ProfilPengguna user={user} />;
+        return <ComingSoon page={activePage} />;
       default:
         return <ComingSoon page={activePage} />;
     }
   }
 
+  const handleProfileUpdated = (updated: { nama: string; username: string; fotoUrl: string | null }) => {
+    setUser(prev => prev ? {
+      ...prev,
+      nama: updated.nama,
+      username: updated.username,
+      fotoUrl: updated.fotoUrl,
+      initials: updated.nama
+        .split(' ')
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((w: string) => w[0].toUpperCase())
+        .join(''),
+    } : null);
+  };
+
   return (
-    <Layout
-      activePage={activePage}
-      setActivePage={setActivePage}
-      user={user}
-      onLogout={handleLogout}
-      appConfig={appConfig}
-    >
-      {renderPage()}
-    </Layout>
+    <>
+      <Layout
+        activePage={activePage}
+        setActivePage={setActivePage}
+        user={user}
+        onLogout={handleLogout}
+        onOpenProfile={() => setIsProfileModalOpen(true)}
+        appConfig={appConfig}
+      >
+        {renderPage()}
+      </Layout>
+      <ProfilPenggunaModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+        user={user ? {
+          id: user.id,
+          nama: user.nama,
+          username: user.username,
+          email: user.email || '',
+          foto_url: user.fotoUrl,
+          role: user.role,
+          status: 'aktif',
+          created_at: '',
+          updated_at: '',
+        } : null}
+        onProfileUpdated={handleProfileUpdated}
+      />
+    </>
   );
 }

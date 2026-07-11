@@ -64,6 +64,7 @@ class Setting extends Model
                 'maks_percobaan_login' => 5,
                 'durasi_lockout_menit' => 15,
                 'sesi_timeout_menit' => 480,
+                'default_role_pengguna_baru' => 'kasir',
             ],
             'integrasi' => [
                 'smtp_host' => 'smtp.gmail.com',

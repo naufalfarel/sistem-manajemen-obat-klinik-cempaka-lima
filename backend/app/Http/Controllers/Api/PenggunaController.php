@@ -15,20 +15,12 @@ use Illuminate\Support\Facades\Storage;
 
 class PenggunaController extends Controller
 {
-    /** GET /api/roles — daftar role yang tersedia (diambil dari User::ROLES) */
+    /** GET /api/roles — daftar role yang tersedia (diambil dari database) */
     public function roles(): JsonResponse
     {
-        $labels = [
-            'admin'       => 'Administrator',
-            'apoteker'    => 'Apoteker',
-            'staf-gudang' => 'Staf Gudang',
-            'kasir'       => 'Kasir',
-        ];
-
-        $roles = collect(User::ROLES)->map(fn (string $slug) => [
-            'value' => $slug,
-            'label' => $labels[$slug] ?? $slug,
-        ])->values();
+        $roles = \Illuminate\Support\Facades\DB::table('roles')
+            ->select(['slug as value', 'name as label'])
+            ->get();
 
         return response()->json(['data' => $roles]);
     }

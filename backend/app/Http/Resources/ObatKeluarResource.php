@@ -35,6 +35,13 @@ class ObatKeluarResource extends JsonResource
                 'nama' => \App\Models\User::find($this->kasir_id)?->nama ?? 'Petugas',
             ],
             'jenis' => $this->status !== 'selesai' ? $this->status : ($this->dokter ? 'resep' : 'otc'),
+            'tipe_resep' => $this->tipe_resep,
+            'riwayat_cetak' => $this->relationLoaded('riwayatCetak') ? $this->riwayatCetak->map(fn ($r) => [
+                'id' => $r->id,
+                'jenis' => $r->jenis,
+                'actor' => $r->user?->nama ?? 'Petugas',
+                'created_at' => $r->created_at?->toIso8601String(),
+            ]) : [],
             'catatan' => $this->alasan_retur_void,
             'items' => ObatKeluarItemResource::collection($this->whenLoaded('items')),
             'created_at' => $this->created_at?->toIso8601String(),

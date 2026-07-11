@@ -90,6 +90,7 @@ export function Login({ onLogin, appConfig }: LoginProps) {
         nama:     u.nama,
         role:     u.role,
         fotoUrl:  u.foto_url ?? null,
+        email:    u.email,
         initials: getInitials(u.nama),
       });
     } catch (err) {
@@ -141,7 +142,7 @@ export function Login({ onLogin, appConfig }: LoginProps) {
         flexShrink: 0,
       }}>
         <span style={{ fontFamily: "'IBM Plex Sans', system-ui", fontSize: 11, color: 'rgba(255,255,255,0.45)', letterSpacing: '0.06em' }}>
-          SISTEM MANAJEMEN OBAT — KLINIK UTAMA CEMPAKA LIMA
+          SISTEM MANAJEMEN OBAT & BMHP — KLINIK UTAMA CEMPAKA LIMA
         </span>
         <Clock />
       </div>
@@ -200,7 +201,7 @@ export function Login({ onLogin, appConfig }: LoginProps) {
                 fontSize: 11.5, color: 'rgba(255,255,255,0.55)', marginTop: 4,
                 letterSpacing: '0.06em',
               }}>
-                SISTEM MANAJEMEN OBAT
+                SISTEM MANAJEMEN OBAT & BMHP
               </div>
             </div>
           </div>
@@ -375,7 +376,7 @@ export function Login({ onLogin, appConfig }: LoginProps) {
         flexShrink: 0,
       }}>
         <span style={{ fontFamily: "'IBM Plex Sans', system-ui", fontSize: 11, color: '#94A3B8' }}>
-          Sistem Manajemen Obat v2.1.0
+          Sistem Manajemen Obat & BMHP v2.1.0
         </span>
         <span style={{ color: '#E2E8F0' }}>·</span>
         <span style={{ fontFamily: "'IBM Plex Sans', system-ui", fontSize: 11, color: '#94A3B8' }}>

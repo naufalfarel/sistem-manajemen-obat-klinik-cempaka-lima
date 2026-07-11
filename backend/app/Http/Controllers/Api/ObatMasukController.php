@@ -120,12 +120,29 @@ class ObatMasukController extends Controller
                 if ($obat) {
                     $obat->increment('stok', $item->jumlah);
                     
-                    // Sinkronisasi data expired dan harga beli terbaru ke Master Obat
-                    $updates = ['harga_beli' => $item->harga_satuan];
+                    $updates = [];
                     if ($item->expired_date) {
                         $updates['expired_date'] = $item->expired_date;
                     }
-                    $obat->update($updates);
+
+                    // Jika harga beli baru berbeda, buat usulan. Jangan override otomatis.
+                    if ((float)$item->harga_satuan != (float)$obat->harga_beli) {
+                        \App\Models\RiwayatHarga::create([
+                            'obat_id' => $obat->id,
+                            'user_id' => auth()->id() ?: $obatMasuk->petugas_id,
+                            'harga_beli_lama' => (float)$obat->harga_beli,
+                            'harga_beli_baru' => (float)$item->harga_satuan,
+                            'harga_jual_lama' => (float)$obat->harga_jual,
+                            'harga_jual_baru' => (float)$obat->harga_jual,
+                            'sumber' => 'faktur',
+                            'no_transaksi' => $obatMasuk->no_transaksi,
+                            'status' => 'usulan',
+                        ]);
+                    }
+
+                    if (!empty($updates)) {
+                        $obat->update($updates);
+                    }
                 }
             }
 
@@ -150,5 +167,24 @@ class ObatMasukController extends Controller
         $obatMasuk->delete();
 
         return response()->json(null, 204);
+    }
+
+    /**
+     * GET /api/obat-masuk/check-faktur
+     */
+    public function checkFaktur(Request $request): JsonResponse
+    {
+        $supplierId = $request->integer('supplier_id');
+        $faktur = $request->string('faktur')->trim()->value();
+
+        if (!$supplierId || !$faktur) {
+            return response()->json(['exists' => false]);
+        }
+
+        $exists = ObatMasuk::where('supplier_id', $supplierId)
+            ->where('catatan', $faktur)
+            ->exists();
+
+        return response()->json(['exists' => $exists]);
     }
 }

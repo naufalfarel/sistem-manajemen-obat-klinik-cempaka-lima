@@ -17,14 +17,17 @@ class StorePenggunaRequest extends FormRequest
     /** @return array<string, mixed> */
     public function rules(): array
     {
+        $settings = \App\Models\Setting::query()->where('category', 'keamanan')->value('data');
+        $min = (int) ($settings['panjang_password_minimum'] ?? 8);
+
         return [
             'nama' => ['required', 'string', 'max:255'],
             'username' => ['required', 'string', 'max:100', 'alpha_dash', 'unique:users,username'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'password' => ['required', 'string', Password::min(8)],
+            'password' => ['required', 'string', Password::min($min)],
             'nip' => ['nullable', 'string', 'max:50'],
             'foto' => ['nullable', 'image', 'max:2048'],
-            'role' => ['required', Rule::in(User::ROLES)],
+            'role' => ['required', Rule::exists('roles', 'slug')],
             'status' => ['sometimes', Rule::in(['aktif', 'nonaktif'])],
         ];
     }

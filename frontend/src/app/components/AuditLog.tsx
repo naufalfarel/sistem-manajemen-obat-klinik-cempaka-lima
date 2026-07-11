@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Search, X, Download, ChevronDown, Clock, Shield, FileText, RefreshCw, SlidersHorizontal, Loader2 } from 'lucide-react';
-import { auditLogApi, type AuditLog as ApiAuditLog } from '../services/api';
+import { Search, Download, ChevronDown, Clock, Shield, RefreshCw, Loader2 } from 'lucide-react';
+import { auditLogApi, type AuditLog as ApiAuditLog, penggunaApi, type Pengguna } from '../services/api';
 import { toast } from 'sonner';
 
 const C = {
-  navy:    '#1B2A45',
-  sage:    '#4F7A6B',
+  navy:    '#064E3B', // Dark emerald/dark green
+  sage:    '#0F9D74', // Emerald (consistent with Layout.tsx ACTIVE_CLR)
   amber:   '#C98A2C',
   slate:   '#7C8B93',
   brick:   '#B8483A',
@@ -16,25 +16,37 @@ const C = {
 };
 
 const F = {
-  heading: "'Space Grotesk', system-ui, sans-serif",
-  body:    "'IBM Plex Sans', system-ui, sans-serif",
+  heading: "'Poppins', 'Space Grotesk', system-ui, sans-serif",
+  body:    "'Poppins', 'IBM Plex Sans', system-ui, sans-serif",
   mono:    "'IBM Plex Mono', 'Courier New', monospace",
 };
 
 const ACTION_CFG: Record<string, { label: string; color: string; bg: string }> = {
-  tambah:  { label: 'Tambah',  color: C.sage,  bg: '#EDF3F1' },
+  tambah:  { label: 'Tambah',  color: C.sage,  bg: '#EAF6F2' },
   ubah:    { label: 'Ubah',    color: C.amber, bg: '#FBF4E8' },
   hapus:   { label: 'Hapus',   color: C.brick, bg: '#FDF2F0' },
   login:   { label: 'Login',   color: C.slate, bg: '#F0F2F3' },
   logout:  { label: 'Logout',  color: C.slate, bg: '#F0F2F3' },
-  ekspor:  { label: 'Ekspor',  color: C.navy,  bg: '#EEF1F7' },
+  ekspor:  { label: 'Ekspor',  color: '#1E3A8A', bg: '#EFF6FF' }, // blue/navy for export
 };
 
 const ROLE_CFG: Record<string, { label: string; color: string; bg: string }> = {
-  admin:         { label: 'Admin',       color: C.navy,  bg: '#EEF1F7' },
-  apoteker:      { label: 'Apoteker',    color: C.sage,  bg: '#EDF3F1' },
+  admin:         { label: 'Admin',       color: C.navy,  bg: '#EAF6F2' },
+  apoteker:      { label: 'Apoteker',    color: C.sage,  bg: '#EAF6F2' },
   'staf-gudang': { label: 'Staf Gudang', color: C.slate, bg: '#F0F2F3' },
   kasir:         { label: 'Kasir',       color: C.amber, bg: '#FBF4E8' },
+};
+
+const MODULE_LABELS: Record<string, string> = {
+  pengguna: 'Pengguna',
+  obat: 'Obat',
+  kategori: 'Kategori Obat',
+  supplier: 'Supplier',
+  'obat-masuk': 'Obat Masuk',
+  'obat-keluar': 'Obat Keluar',
+  pengaturan: 'Pengaturan Sistem',
+  auth: 'Autentikasi',
+  'audit-log': 'Audit Log',
 };
 
 function fmtTime(dateStr: string): string {
@@ -49,6 +61,19 @@ function fmtFullDate(dateStr: string): string {
 
 function initials(name: string): string {
   return name.split(' ').slice(0, 2).map(s => s[0]).join('').toUpperCase();
+}
+
+function formatValue(val: any): string {
+  if (val === undefined || val === null) return '—';
+  if (typeof val === 'boolean') return val ? 'Ya' : 'Tidak';
+  if (typeof val === 'object') {
+    try {
+      return JSON.stringify(val);
+    } catch {
+      return String(val);
+    }
+  }
+  return String(val);
 }
 
 function UserAvatar({ nama, role }: { nama: string; role: string }) {
@@ -134,8 +159,8 @@ function EntryDetail({ entry }: { entry: ApiAuditLog }) {
           <div style={{ fontFamily: F.body, fontSize: 9, fontWeight: 700, color: C.slate, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 2 }}>
             Modul
           </div>
-          <div style={{ fontFamily: F.mono, fontSize: 11, color: C.navy, textTransform: 'capitalize' }}>
-            {entry.module}
+          <div style={{ fontFamily: F.body, fontSize: 11, color: C.navy, fontWeight: 600 }}>
+            {MODULE_LABELS[entry.module] || entry.module}
           </div>
         </div>
       </div>
@@ -160,10 +185,10 @@ function EntryDetail({ entry }: { entry: ApiAuditLog }) {
                 {field}
               </div>
               <div style={{ padding: '5px 12px', fontFamily: F.mono, fontSize: 11, color: C.brick, backgroundColor: '#FFF9F8', borderLeft: `1px solid ${C.divider}`, overflowX: 'auto' }}>
-                {entry.before?.[field] !== undefined ? JSON.stringify(entry.before[field]) : '—'}
+                {formatValue(entry.before?.[field])}
               </div>
               <div style={{ padding: '5px 12px', fontFamily: F.mono, fontSize: 11, color: C.sage, backgroundColor: '#F6FBF8', borderLeft: `1px solid ${C.divider}`, overflowX: 'auto' }}>
-                {entry.after?.[field] !== undefined ? JSON.stringify(entry.after[field]) : '—'}
+                {formatValue(entry.after?.[field])}
               </div>
             </div>
           ))}
@@ -185,12 +210,30 @@ export function AuditLog() {
   const [search, setSearch] = useState('');
   const [filterModule, setFilterModule] = useState('');
   const [filterAction, setFilterAction] = useState('');
+  const [filterUserId, setFilterUserId] = useState('');
+  const [filterDari, setFilterDari] = useState('');
+  const [filterSampai, setFilterSampai] = useState('');
+
+  const [usersList, setUsersList] = useState<Pengguna[]>([]);
   
   const [page, setPage] = useState(1);
   const [lastPage, setLastPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
 
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+
+  // Load daftar user untuk filter dropdown
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const res = await penggunaApi.list({ per_page: 100 });
+        setUsersList(res.data);
+      } catch (err) {
+        console.error('Gagal memuat daftar pengguna untuk filter', err);
+      }
+    };
+    fetchUsers();
+  }, []);
 
   const fetchLogs = async (isSilent = false) => {
     if (!isSilent) setLoading(true);
@@ -202,7 +245,10 @@ export function AuditLog() {
         per_page: 15,
         search: search.trim() || undefined,
         module: filterModule || undefined,
-        action: (filterAction || undefined) as any
+        action: (filterAction || undefined) as any,
+        user_id: filterUserId ? parseInt(filterUserId) : undefined,
+        dari: filterDari || undefined,
+        sampai: filterSampai || undefined,
       });
       setLogs(res.data);
       setLastPage(res.meta.last_page);
@@ -217,7 +263,7 @@ export function AuditLog() {
 
   useEffect(() => {
     fetchLogs();
-  }, [page, filterModule, filterAction]);
+  }, [page, filterModule, filterAction, filterUserId, filterDari, filterSampai]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -234,6 +280,18 @@ export function AuditLog() {
     });
   };
 
+  const handleExport = (format: 'csv' | 'pdf') => {
+    const url = auditLogApi.export({
+      search: search.trim() || undefined,
+      module: filterModule || undefined,
+      action: (filterAction || undefined) as any,
+      user_id: filterUserId ? parseInt(filterUserId) : undefined,
+      dari: filterDari || undefined,
+      sampai: filterSampai || undefined,
+    }, format);
+    window.open(url, '_blank');
+  };
+
   // Group by date harian
   const groupedLogs = useMemo(() => {
     const groups: Record<string, ApiAuditLog[]> = {};
@@ -248,79 +306,177 @@ export function AuditLog() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h2 style={{ fontFamily: F.heading, fontSize: 18, fontWeight: 700, color: C.navy, margin: 0 }}>
+            Audit Log Aktivitas
+          </h2>
+          <p style={{ fontFamily: F.body, fontSize: 13, color: C.slate, margin: '2px 0 0' }}>
+            Riwayat lengkap seluruh aktivitas penting dalam sistem manajemen obat.
+          </p>
+        </div>
+        <div style={{
+          backgroundColor: '#EEF5F2', border: `1px solid ${C.sage}33`, borderRadius: 6,
+          padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6
+        }}>
+          <Shield size={14} style={{ color: C.sage }} />
+          <span style={{ fontFamily: F.body, fontSize: 13, fontWeight: 600, color: C.navy }}>
+            {totalCount} Log Terdaftar
+          </span>
+        </div>
+      </div>
+
       {/* Search & filters */}
       <div style={{
-        backgroundColor: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '12px 16px'
+        backgroundColor: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
       }}>
-        <form onSubmit={handleSearchSubmit} style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 8, backgroundColor: C.paper,
-            border: `1px solid ${C.border}`, borderRadius: 4, padding: '6px 12px', flex: 1, minWidth: 200
-          }}>
-            <Search size={14} style={{ color: C.slate }} />
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Cari deskripsi log..."
+        <form onSubmit={handleSearchSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {/* Row 1: Search & dropdown filters */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8, backgroundColor: C.paper,
+              border: `1px solid ${C.border}`, borderRadius: 4, padding: '6px 12px', flex: 1, minWidth: 200
+            }}>
+              <Search size={14} style={{ color: C.slate }} />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Cari deskripsi log..."
+                style={{
+                  background: 'none', border: 'none', outline: 'none', width: '100%',
+                  fontFamily: F.body, fontSize: 13, color: C.navy
+                }}
+              />
+            </div>
+
+            <select
+              value={filterModule}
+              onChange={e => { setFilterModule(e.target.value); setPage(1); }}
               style={{
-                background: 'none', border: 'none', outline: 'none', width: '100%',
-                fontFamily: F.body, fontSize: 13, color: C.navy
+                padding: '8px 12px', borderRadius: 4, border: `1px solid ${C.border}`,
+                backgroundColor: '#fff', fontSize: 13, fontFamily: F.body, color: C.navy, outline: 'none'
               }}
-            />
+            >
+              <option value="">Semua Modul</option>
+              <option value="pengguna">Pengguna (Auth)</option>
+              <option value="obat">Obat</option>
+              <option value="kategori">Kategori Obat</option>
+              <option value="supplier">Supplier</option>
+              <option value="obat-masuk">Obat Masuk</option>
+              <option value="obat-keluar">Obat Keluar</option>
+              <option value="pengaturan">Pengaturan</option>
+            </select>
+
+            <select
+              value={filterAction}
+              onChange={e => { setFilterAction(e.target.value); setPage(1); }}
+              style={{
+                padding: '8px 12px', borderRadius: 4, border: `1px solid ${C.border}`,
+                backgroundColor: '#fff', fontSize: 13, fontFamily: F.body, color: C.navy, outline: 'none'
+              }}
+            >
+              <option value="">Semua Aksi</option>
+              <option value="tambah">Tambah</option>
+              <option value="ubah">Ubah</option>
+              <option value="hapus">Hapus</option>
+              <option value="login">Login</option>
+              <option value="logout">Logout</option>
+              <option value="ekspor">Ekspor</option>
+            </select>
+
+            <select
+              value={filterUserId}
+              onChange={e => { setFilterUserId(e.target.value); setPage(1); }}
+              style={{
+                padding: '8px 12px', borderRadius: 4, border: `1px solid ${C.border}`,
+                backgroundColor: '#fff', fontSize: 13, fontFamily: F.body, color: C.navy, outline: 'none'
+              }}
+            >
+              <option value="">Semua Pengguna</option>
+              {usersList.map(u => (
+                <option key={u.id} value={u.id}>{u.nama} ({u.role})</option>
+              ))}
+            </select>
           </div>
 
-          <select
-            value={filterModule}
-            onChange={e => { setFilterModule(e.target.value); setPage(1); }}
-            style={{
-              padding: '8px 12px', borderRadius: 4, border: `1px solid ${C.border}`,
-              backgroundColor: '#fff', fontSize: 13, fontFamily: F.body, color: C.navy, outline: 'none'
-            }}
-          >
-            <option value="">Semua Modul</option>
-            <option value="pengguna">Pengguna (Auth)</option>
-            <option value="obat">Obat</option>
-            <option value="kategori_obat">Kategori Obat</option>
-            <option value="supplier">Supplier</option>
-            <option value="obat_masuk">Obat Masuk</option>
-            <option value="obat_keluar">Obat Keluar</option>
-            <option value="pengaturan">Pengaturan</option>
-          </select>
+          {/* Row 2: Date Filters & Export */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', borderTop: `1px solid ${C.divider}`, paddingTop: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 12, fontFamily: F.body, color: C.slate }}>Dari:</span>
+              <input
+                type="date"
+                value={filterDari}
+                onChange={e => { setFilterDari(e.target.value); setPage(1); }}
+                style={{
+                  padding: '7px 10px', borderRadius: 4, border: `1px solid ${C.border}`,
+                  backgroundColor: '#fff', fontSize: 13, fontFamily: F.body, color: C.navy, outline: 'none'
+                }}
+              />
+            </div>
 
-          <select
-            value={filterAction}
-            onChange={e => { setFilterAction(e.target.value); setPage(1); }}
-            style={{
-              padding: '8px 12px', borderRadius: 4, border: `1px solid ${C.border}`,
-              backgroundColor: '#fff', fontSize: 13, fontFamily: F.body, color: C.navy, outline: 'none'
-            }}
-          >
-            <option value="">Semua Aksi</option>
-            <option value="tambah">Tambah</option>
-            <option value="ubah">Ubah</option>
-            <option value="hapus">Hapus</option>
-            <option value="login">Login</option>
-            <option value="logout">Logout</option>
-            <option value="ekspor">Ekspor</option>
-          </select>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 12, fontFamily: F.body, color: C.slate }}>Sampai:</span>
+              <input
+                type="date"
+                value={filterSampai}
+                onChange={e => { setFilterSampai(e.target.value); setPage(1); }}
+                style={{
+                  padding: '7px 10px', borderRadius: 4, border: `1px solid ${C.border}`,
+                  backgroundColor: '#fff', fontSize: 13, fontFamily: F.body, color: C.navy, outline: 'none'
+                }}
+              />
+            </div>
 
-          <button
-            type="button"
-            onClick={() => fetchLogs(true)}
-            style={{
-              padding: '8px 12px', borderRadius: 4, border: `1px solid ${C.border}`,
-              backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center'
-            }}
-            disabled={refreshing}
-          >
-            <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
-          </button>
+            {/* Clear date filters if filled */}
+            {(filterDari || filterSampai) && (
+              <button
+                type="button"
+                onClick={() => { setFilterDari(''); setFilterSampai(''); setPage(1); }}
+                style={{
+                  padding: '4px 8px', borderRadius: 4, border: 'none',
+                  backgroundColor: '#fee2e2', color: '#ef4444', fontSize: 12, cursor: 'pointer', fontFamily: F.body
+                }}
+              >
+                Clear Tanggal
+              </button>
+            )}
+
+            <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
+              <button
+                type="button"
+                onClick={() => handleExport('csv')}
+                style={{
+                  padding: '8px 12px', borderRadius: 4, border: `1px solid ${C.border}`,
+                  backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                  fontSize: 13, fontFamily: F.body, color: C.navy
+                }}
+              >
+                <Download size={13} style={{ color: C.sage }} />
+                <span>Ekspor CSV</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => fetchLogs(true)}
+                style={{
+                  padding: '8px 12px', borderRadius: 4, border: `1px solid ${C.border}`,
+                  backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center'
+                }}
+                disabled={refreshing}
+              >
+                <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none', color: C.sage }} />
+              </button>
+            </div>
+          </div>
         </form>
       </div>
 
       {/* Logs timeline list */}
       <div style={{
-        backgroundColor: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '16px 20px', minHeight: 300
+        backgroundColor: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px 20px', minHeight: 300,
+        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
       }}>
         {loading ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 260, gap: 8 }}>

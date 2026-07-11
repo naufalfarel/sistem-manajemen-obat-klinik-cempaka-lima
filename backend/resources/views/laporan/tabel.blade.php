@@ -42,6 +42,6 @@
         </tbody>
     </table>
 
-    <p class="footer-note">Sistem Manajemen Obat &middot; Klinik Utama Cempaka Lima</p>
+    <p class="footer-note">Sistem Manajemen Obat &amp; BMHP &middot; Klinik Utama Cempaka Lima</p>
 </body>
 </html>
